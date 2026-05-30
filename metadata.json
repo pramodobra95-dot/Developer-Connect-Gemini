@@ -1,0 +1,6 @@
+{
+  "name": "DeveloperConnect",
+  "description": "AI-powered marketplace connecting startups and recruiters with pre-vetted premium developers, complete with role-based dashboard controls, dynamic project creation, Escrow payments, dispute mediators, and real-time Gemini project analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
