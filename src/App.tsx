@@ -157,6 +157,7 @@ export default function App() {
       setIsLoading(false);
     } catch (e) {
       console.error("Error loading secure session records", e);
+      setIsLoading(false);
     }
   };
 
