@@ -79,7 +79,7 @@ if (geminiApiKey) {
 // ----------------------------------------------------
 // Mock Databases
 // ----------------------------------------------------
-let currentUserId = "admin"; // Default session user (admin = administrator)
+let currentUserId = ""; // Default session user empty (no active logged in session)
 
 let users = [
   { id: "dev-aryan", email: "aryan.sharma@gmail.com", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2026-01-15T10:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true } },

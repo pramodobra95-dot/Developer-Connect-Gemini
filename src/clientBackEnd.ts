@@ -320,8 +320,12 @@ export const initializeStorageDatabase = () => {
     setStorageItem("dc_ndas", defaultNdas);
     setStorageItem("dc_reviews", defaultReviews);
     setStorageItem("dc_notifications", defaultNotifications);
-    setStorageItem("dc_currentUserId", "admin");
+    setStorageItem("dc_currentUserId", "");
     localStorage.setItem("dc_initialized", "true");
+  }
+  if (!localStorage.getItem("dc_landing_force_v1")) {
+    setStorageItem("dc_currentUserId", "");
+    localStorage.setItem("dc_landing_force_v1", "true");
   }
 };
 
@@ -348,7 +352,7 @@ const handleMockRequest = async (url: string, init?: RequestInit): Promise<Respo
   let ndas = getStorageItem("dc_ndas", defaultNdas);
   let reviews = getStorageItem("dc_reviews", defaultReviews);
   let notifications = getStorageItem("dc_notifications", defaultNotifications);
-  let currentUserId = getStorageItem("dc_currentUserId", "admin");
+  let currentUserId = getStorageItem("dc_currentUserId", "");
 
   const buildJSONResponse = (data: any, status = 200) => {
     return new Response(JSON.stringify(data), {

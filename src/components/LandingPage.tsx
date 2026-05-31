@@ -58,6 +58,7 @@ export default function LandingPage({
   const [googleRole, setGoogleRole] = useState<"DEVELOPER" | "RECRUITER">("DEVELOPER");
   const [googleName, setGoogleName] = useState("");
   const [googleBio, setGoogleBio] = useState("");
+  const [googleModalTab, setGoogleModalTab] = useState<"login" | "signup">("login");
 
   const handleGoogleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +76,7 @@ export default function LandingPage({
       return;
     }
     
-    if (activeTab === "login") {
+    if (googleModalTab === "login") {
       try {
         const resp = await fetch("/api/session/login", {
           method: "POST",
@@ -90,8 +91,9 @@ export default function LandingPage({
             onLoginSuccess();
           }, 1000);
         } else {
-          setErrorMessage(`Google Account not registered yet. Please use the Google Sign Up option below.`);
-          setShowGoogleModal(false);
+          setErrorMessage(`Google Account (${formattedEmail}) is not registered yet on DeveloperConnect. We've switched this modal to 'Sign Up' so you can complete your profile registration!`);
+          setGoogleModalTab("signup");
+          setGoogleName(formattedEmail.split("@")[0]);
         }
       } catch {
         setErrorMessage("Network connection timed out during Google Auth.");
@@ -172,7 +174,13 @@ export default function LandingPage({
           onLoginSuccess();
         }, 1000);
       } else {
-        setErrorMessage(data.error || "An error occurred during verification.");
+        if (data.error && data.error.toLowerCase().includes("not registered")) {
+          setErrorMessage("This email is not registered yet. We've switched you over to 'Sign Up Account' so you can set up your profile!");
+          setActiveTab("signup");
+          setEmail(targetEmail);
+        } else {
+          setErrorMessage(data.error || "An error occurred during verification.");
+        }
       }
     } catch {
       setErrorMessage("Network connection timed out. Production database unavailable.");
@@ -319,7 +327,7 @@ export default function LandingPage({
             <p className="text-[#a5d2cb] text-[11px] font-mono pt-1">
               Powered by{" "}
               <a 
-                href="https://bantntconfirm.com" 
+                href="https://www.bantconfirm.com/" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="hover:underline font-black tracking-wide inline-flex items-center gap-0.5"
@@ -426,6 +434,7 @@ export default function LandingPage({
                       setGoogleEmailInput("");
                       setGoogleName("");
                       setGoogleBio("");
+                      setGoogleModalTab("login");
                       setShowGoogleModal(true);
                     }}
                     className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer font-sans"
@@ -586,6 +595,7 @@ export default function LandingPage({
                       setGoogleEmailInput("");
                       setGoogleName("");
                       setGoogleBio("");
+                      setGoogleModalTab("signup");
                       setShowGoogleModal(true);
                     }}
                     className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer font-sans"
@@ -890,7 +900,7 @@ export default function LandingPage({
                 </div>
                 <div>
                   <p className="font-bold text-slate-905">Compliance & Enquiries Desk</p>
-                  <p className="text-slate-500">info.bouuz@gmail.com</p>
+                  <p className="text-slate-500">info@developerconnect.in</p>
                 </div>
               </div>
 
@@ -900,7 +910,7 @@ export default function LandingPage({
                 </div>
                 <div>
                   <p className="font-bold text-slate-905">Impartial Mediation Helpline</p>
-                  <p className="text-slate-500">+91 22 4930-1002 (Mumbai)</p>
+                  <p className="text-slate-500">+91 120 4930-1002 (Noida)</p>
                 </div>
               </div>
 
@@ -910,7 +920,7 @@ export default function LandingPage({
                 </div>
                 <div>
                   <p className="font-bold text-slate-905">National Headquarters</p>
-                  <p className="text-slate-500">Outer Ring Rd, Bellandur, Bengaluru 560103</p>
+                  <p className="text-slate-500">Sector 62, Noida, Uttar Pradesh, India</p>
                 </div>
               </div>
             </div>
@@ -1017,7 +1027,7 @@ export default function LandingPage({
           <p>
             Powered by{" "}
             <a 
-              href="https://bantntconfirm.com" 
+              href="https://www.bantconfirm.com/" 
               target="_blank" 
               rel="noopener noreferrer" 
               className="hover:underline font-bold inline-flex items-center"
@@ -1030,10 +1040,10 @@ export default function LandingPage({
       </footer>
 
       {showGoogleModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 text-slate-800">
-          <div className="bg-white rounded-3xl w-full max-w-md border border-slate-100 shadow-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-[100] p-4 text-slate-800">
+          <div className="bg-white rounded-3xl w-full max-w-sm border border-slate-100 shadow-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             {/* Google logo header */}
-            <div className="p-6 text-center border-b border-slate-100 space-y-4">
+            <div className="p-6 text-center border-b border-slate-100 space-y-3 flex-shrink-0">
               <div className="flex justify-center">
                 <svg className="w-8 h-8" viewBox="0 0 24 24">
                   <path
@@ -1056,70 +1066,53 @@ export default function LandingPage({
               </div>
               <div className="space-y-1">
                 <h3 className="font-sans font-bold text-slate-800 text-lg">
-                  {activeTab === "login" ? "Sign in with Google" : "Create Account with Google"}
+                  {googleModalTab === "login" ? "Sign in with Google" : "Create Account with Google"}
                 </h3>
                 <p className="text-xs text-slate-500 font-medium font-sans">to continue to BANTConfirm Gateway</p>
               </div>
             </div>
 
-            <form onSubmit={handleGoogleAuth} className="p-6 space-y-4 text-slate-800">
-              {/* Account Quick Picker */}
-              <div className="space-y-2">
-                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Google Accounts Suggestion</label>
-                <div className="grid grid-cols-1 gap-1.5 max-h-36 overflow-y-auto">
-                  {activeTab === "login" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGoogleEmailInput("info.bouuz@gmail.com");
-                      }}
-                      className="text-left w-full p-2 hover:bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between text-xs transition-colors cursor-pointer"
-                    >
-                      <div>
-                        <p className="font-bold text-slate-900">System Administrator</p>
-                        <p className="text-[10px] text-slate-500 font-mono">info.bouuz@gmail.com</p>
-                      </div>
-                      <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.5 rounded uppercase font-mono">Admin</span>
-                    </button>
-                  )}
-                  {usersList.slice(0, 3).map((usr: any) => {
-                    if (usr.email === "info.bouuz@gmail.com" && activeTab !== "login") return null;
-                    return (
-                      <button
-                        key={usr.id}
-                        type="button"
-                        onClick={() => {
-                          setGoogleEmailInput(usr.email);
-                          setGoogleName(usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email.split("@")[0]);
-                          if (usr.role) setGoogleRole(usr.role);
-                        }}
-                        className="text-left w-full p-2 hover:bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between text-xs transition-colors cursor-pointer text-slate-800"
-                      >
-                        <div>
-                          <p className="font-bold text-slate-900 text-left">{usr.devProfile?.fullName || usr.recProfile?.companyName || "Member Profile"}</p>
-                          <p className="text-[10px] text-slate-500 font-mono text-left">{usr.email}</p>
-                        </div>
-                        <span className="text-[9px] bg-blue-50 text-blue-600 font-bold px-1.5 py-0.5 rounded uppercase font-mono">{usr.role}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            {/* Modal Specific Tab Switcher */}
+            <div className="flex border-b border-slate-100 flex-shrink-0 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setGoogleModalTab("login")}
+                className={`flex-grow py-3 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  googleModalTab === "login"
+                    ? "border-b-2 border-red-500 text-red-600 bg-white"
+                    : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setGoogleModalTab("signup")}
+                className={`flex-grow py-3 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  googleModalTab === "signup"
+                    ? "border-b-2 border-red-500 text-red-600 bg-white"
+                    : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
 
+            <form onSubmit={handleGoogleAuth} className="p-6 space-y-4 text-slate-800 overflow-y-auto flex-1">
               {/* Enter custom Google Mail */}
-              <div className="space-y-1.5 pt-2">
+              <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest font-mono">Enter Google Email Address</label>
                 <input
                   type="email"
                   value={googleEmailInput}
                   onChange={(e) => setGoogleEmailInput(e.target.value)}
                   placeholder="your-account@gmail.com"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-blue-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-red-500 focus:ring-1 focus:ring-red-500"
                   required
                 />
               </div>
 
-              {activeTab === "signup" && (
+              {googleModalTab === "signup" && (
                 <>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest font-mono">Select Platform Role</label>
@@ -1129,7 +1122,7 @@ export default function LandingPage({
                         onClick={() => setGoogleRole("DEVELOPER")}
                         className={`py-2 text-xs font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           googleRole === "DEVELOPER"
-                            ? "bg-blue-50 border-blue-400 text-blue-700 font-bold"
+                            ? "bg-red-55/40 border-red-400 text-red-700 font-bold"
                             : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 font-normal"
                         }`}
                       >
@@ -1140,7 +1133,7 @@ export default function LandingPage({
                         onClick={() => setGoogleRole("RECRUITER")}
                         className={`py-2 text-xs font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           googleRole === "RECRUITER"
-                            ? "bg-blue-50 border-blue-400 text-blue-700 font-bold"
+                            ? "bg-red-55/40 border-red-400 text-red-700 font-bold"
                             : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 font-normal"
                         }`}
                       >
@@ -1158,7 +1151,7 @@ export default function LandingPage({
                       value={googleName}
                       onChange={(e) => setGoogleName(e.target.value)}
                       placeholder={googleRole === "DEVELOPER" ? "e.g. Vikram Prasad" : "e.g. Nexa Systems"}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-blue-500"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-red-500"
                       required
                     />
                   </div>
@@ -1170,13 +1163,13 @@ export default function LandingPage({
                       value={googleBio}
                       onChange={(e) => setGoogleBio(e.target.value)}
                       placeholder={googleRole === "DEVELOPER" ? "React Developer / Kubernetes Lead..." : "Next Gen Enterprise Solutions..."}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-blue-500"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 outline-none focus:bg-white focus:border-red-500"
                     />
                   </div>
                 </>
               )}
 
-              <div className="flex gap-2 pt-4 border-t border-slate-100">
+              <div className="flex gap-2 pt-4 border-t border-slate-100 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowGoogleModal(false)}
@@ -1186,7 +1179,7 @@ export default function LandingPage({
                 </button>
                 <button
                   type="submit"
-                  className="flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-grow bg-red-500 hover:bg-red-600 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   Continue
                 </button>

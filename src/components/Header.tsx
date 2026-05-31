@@ -43,70 +43,12 @@ export default function Header({
         {/* Logo */}
         <Logo variant="dark" />
 
-        {/* Mobile & Desktop Session Switcher */}
-        <div className="flex items-center gap-2 lg:bg-slate-105 lg:p-1.5 rounded-full lg:border lg:border-slate-200/80 max-w-sm">
-          <span className="text-[10px] text-brand-teal font-mono uppercase font-bold pl-3 pr-2 hidden lg:inline">Active Profile:</span>
-          <div className="relative">
-            {/* Desktop trigger */}
-            <button 
-              onClick={() => setShowSessionSelector(!showSessionSelector)}
-              className="hidden lg:flex bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-4 py-1.5 rounded-full items-center gap-2 transition-all border border-slate-200 shadow-sm cursor-pointer"
-            >
-              <Users className="w-3.5 h-3.5 text-brand-teal" />
-              <span>
-                {currentUser.role === UserRole.ADMIN 
-                  ? "Administrator" 
-                  : currentUser.role === UserRole.RECRUITER 
-                    ? "Recruiter Session" 
-                    : "Developer Session"}
-              </span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
-            </button>
-
-            {/* Mobile trigger */}
-            <button 
-              onClick={() => setShowSessionSelector(!showSessionSelector)}
-              className="lg:hidden p-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-all border border-slate-200 flex items-center justify-center cursor-pointer"
-              title="Switch Active Profile"
-            >
-              <Users className="w-4 h-4 text-brand-teal" />
-            </button>
-
-            {showSessionSelector && (
-              <div className="absolute -right-24 sm:right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 p-2 text-slate-700">
-                <p className="text-[11px] font-mono text-brand-teal uppercase tracking-wider p-2 border-b border-slate-100 mb-1 font-bold">
-                  Switch Active Profile
-                </p>
-                <div className="space-y-1">
-                  {usersList.map((usr) => (
-                    <button
-                      key={usr.id}
-                      onClick={() => {
-                        onSwitchSession(usr.id);
-                        setShowSessionSelector(false);
-                      }}
-                      className={`w-full text-left p-2 rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-between cursor-pointer ${
-                        usr.id === currentUser.id ? "bg-brand-teal-light border border-brand-teal/20" : ""
-                      }`}
-                    >
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                          {usr.email === "info.bouuz@gmail.com" 
-                            ? "info.bouuz@gmail.com (Admin)" 
-                            : usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email}
-                          {usr.isVerified && <Sparkles className="w-3 h-3 text-brand-teal" />}
-                        </p>
-                        <p className="text-[10px] text-slate-500 capitalize font-medium">{usr.role.toLowerCase()}</p>
-                      </div>
-                      {usr.id === currentUser.id && (
-                        <div className="w-1.5 h-1.5 bg-brand-teal rounded-full" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Portal Title Indicator */}
+        <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-1.5 rounded-full select-none">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="text-[10px] font-mono font-bold tracking-widest text-[#00A896] uppercase">
+            SECURE PORTAL
+          </span>
         </div>
 
         {/* Global Toolbar & Profile Info */}
