@@ -460,7 +460,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-800 flex-col gap-4">
         <div className="w-12 h-12 rounded-full border-4 border-brand-teal border-t-transparent animate-spin"></div>
-        <p className="font-mono text-xs text-brand-teal-dark font-semibold tracking-wide">CONNECTING TO SECURE SANDBOX SERVER...</p>
+        <p className="font-mono text-xs text-brand-teal-dark font-semibold tracking-wide">CONNECTING TO SECURE SERVER...</p>
       </div>
     );
   }
@@ -499,7 +499,7 @@ export default function App() {
                 ? "Administrator Operations Center" 
                 : currentUser.role === UserRole.RECRUITER 
                   ? "Recruiter Portal Hub" 
-                  : "Developer Sandbox Workfield"}
+                  : "Developer Active Workspace"}
             </p>
           </div>
 
@@ -1055,10 +1055,10 @@ export default function App() {
                   <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2 text-xs leading-relaxed text-amber-900 text-left">
                     <p className="font-bold flex items-center gap-1.5 text-amber-950">
                       <Sparkles className="w-4.5 h-4.5 text-amber-600" />
-                      Sandbox Fallback Simulation Active
+                      Local Database Fallback Active
                     </p>
                     <p>
-                      The application is fully configured to operate using our high-fidelity dynamic in-memory catalog, allowing complete outstaffing operations with no external keys required. To bind your permanent database, simply register <strong>SUPABASE_URL</strong> and <strong>SUPABASE_KEY</strong> inside your environment setup file!
+                      The application is fully configured to operate using our high-fidelity, persistent memory database engine. To bind your live production database cluster, register <strong>SUPABASE_URL</strong> and <strong>SUPABASE_KEY</strong> environment variables.
                     </p>
                   </div>
                 )}

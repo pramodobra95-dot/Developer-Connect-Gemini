@@ -43,9 +43,9 @@ export default function Header({
         {/* Logo */}
         <Logo variant="dark" />
 
-        {/* Mobile & Desktop Sandbox Session Switcher */}
+        {/* Mobile & Desktop Session Switcher */}
         <div className="flex items-center gap-2 lg:bg-slate-105 lg:p-1.5 rounded-full lg:border lg:border-slate-200/80 max-w-sm">
-          <span className="text-[10px] text-brand-teal font-mono uppercase font-bold pl-3 pr-2 hidden lg:inline">Sandbox Act:</span>
+          <span className="text-[10px] text-brand-teal font-mono uppercase font-bold pl-3 pr-2 hidden lg:inline">Active Profile:</span>
           <div className="relative">
             {/* Desktop trigger */}
             <button 
@@ -67,7 +67,7 @@ export default function Header({
             <button 
               onClick={() => setShowSessionSelector(!showSessionSelector)}
               className="lg:hidden p-2 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-all border border-slate-200 flex items-center justify-center cursor-pointer"
-              title="Switch Sandbox Persona"
+              title="Switch Active Profile"
             >
               <Users className="w-4 h-4 text-brand-teal" />
             </button>
@@ -75,7 +75,7 @@ export default function Header({
             {showSessionSelector && (
               <div className="absolute -right-24 sm:right-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 p-2 text-slate-700">
                 <p className="text-[11px] font-mono text-brand-teal uppercase tracking-wider p-2 border-b border-slate-100 mb-1 font-bold">
-                  Connect Persona (Simulated Auth)
+                  Switch Active Profile
                 </p>
                 <div className="space-y-1">
                   {usersList.map((usr) => (

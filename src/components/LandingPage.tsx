@@ -175,7 +175,7 @@ export default function LandingPage({
         setErrorMessage(data.error || "An error occurred during verification.");
       }
     } catch {
-      setErrorMessage("Network connection timed out. Sandbox database unavailable.");
+      setErrorMessage("Network connection timed out. Production database unavailable.");
     }
   };
 
@@ -216,7 +216,7 @@ export default function LandingPage({
         setErrorMessage(data.error || "Failed to create account profile.");
       }
     } catch {
-      setErrorMessage("Sandbox API request failed.");
+      setErrorMessage("Production API request failed.");
     }
   };
 
