@@ -91,7 +91,7 @@ export default function Header({
                     >
                       <div>
                         <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                          {usr.role === UserRole.ADMIN 
+                          {usr.email === "info.bouuz@gmail.com" 
                             ? "info.bouuz@gmail.com (Admin)" 
                             : usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email}
                           {usr.isVerified && <Sparkles className="w-3 h-3 text-brand-teal" />}

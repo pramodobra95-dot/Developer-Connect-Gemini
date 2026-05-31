@@ -42,7 +42,8 @@ import {
   ApplicationStatus,
   InviteStatus,
   ProjectStage,
-  NDA
+  NDA,
+  Review
 } from "./types.js";
 
 type WorkspaceTab = "dashboard" | "projects" | "scout" | "chats" | "disputes" | "supabase" | "faq";
@@ -65,6 +66,7 @@ export default function App() {
   const [projectStages, setProjectStages] = useState<ProjectStage[]>([]);
   const [ndas, setNdas] = useState<NDA[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<any>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   // Projects Board Filter states
   const [selectedTechs, setSelectedTechs] = useState<string[]>([]);
@@ -108,7 +110,8 @@ export default function App() {
         dispResp, 
         notifResp,
         stagesResp,
-        ndasResp
+        ndasResp,
+        reviewsResp
       ] = await Promise.all([
         fetch("/api/projects"),
         fetch("/api/applications"),
@@ -119,7 +122,8 @@ export default function App() {
         fetch("/api/disputes"),
         fetch("/api/notifications"),
         fetch("/api/project-stages"),
-        fetch("/api/ndas")
+        fetch("/api/ndas"),
+        fetch("/api/reviews")
       ]);
 
       setProjects(await projResp.json());
@@ -128,6 +132,7 @@ export default function App() {
       setContactRequests(await conResp.json());
       setProjectStages(await stagesResp.json());
       setNdas(await ndasResp.json());
+      setReviews(await reviewsResp.json());
       
       const chatsData = await chatsResp.json();
       setChats(chatsData);
@@ -213,6 +218,24 @@ export default function App() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(proj)
+    });
+    fetchData();
+  };
+
+  const handlePostReview = async (review: Partial<Review>) => {
+    await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(review)
+    });
+    fetchData();
+  };
+
+  const handleUpdateProjectStatus = async (projectId: string, status: ProjectStatus) => {
+    await fetch("/api/projects/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, status })
     });
     fetchData();
   };
@@ -471,19 +494,31 @@ export default function App() {
         <aside className="hidden lg:block lg:col-span-3 bg-white border border-slate-200/90 rounded-2xl p-5 shadow-sm space-y-6">
           <div>
             <h3 className="text-xs font-mono font-bold tracking-widest text-slate-900 uppercase">Interactive Workspace</h3>
-            <p className="text-[10px] text-brand-teal-dark font-mono mt-0.5 font-bold">Dual-Mode Intermediary Gateway</p>
+            <p className="text-[10px] text-brand-teal-dark font-mono mt-0.5 font-bold">
+              {currentUser.role === UserRole.ADMIN 
+                ? "Administrator Operations Center" 
+                : currentUser.role === UserRole.RECRUITER 
+                  ? "Recruiter Portal Hub" 
+                  : "Developer Sandbox Workfield"}
+            </p>
           </div>
 
           <nav className="space-y-1">
-            {[
-              { id: "dashboard", label: "Control Center", icon: Layers },
-              { id: "projects", label: "Projects Board", icon: Briefcase },
-              { id: "scout", label: "Talent Scout Pool", icon: Users },
-              { id: "chats", label: "Frictionless Chat", icon: MessageSquare },
-              { id: "disputes", label: "Mediator Disputes", icon: Gavel },
-              { id: "supabase", label: "Supabase SQL Sync", icon: Database },
-              { id: "faq", label: "Compliance & FAQ", icon: HelpCircle }
-            ].map((tab) => {
+            {(currentUser.role === UserRole.ADMIN 
+              ? [
+                  { id: "dashboard", label: "Admin Control Panel", icon: ShieldCheck },
+                  { id: "disputes", label: "Mediator Disputes", icon: Gavel },
+                  { id: "supabase", label: "Supabase SQL Sync", icon: Database },
+                  { id: "faq", label: "Compliance & FAQ", icon: HelpCircle }
+                ]
+              : [
+                  { id: "dashboard", label: "Control Center", icon: Layers },
+                  { id: "projects", label: "Projects Board", icon: Briefcase },
+                  { id: "scout", label: "Talent Scout Pool", icon: Users },
+                  { id: "chats", label: "Frictionless Chat", icon: MessageSquare },
+                  { id: "faq", label: "Compliance & FAQ", icon: HelpCircle }
+                ]
+            ).map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
@@ -517,20 +552,31 @@ export default function App() {
         <section className="lg:col-span-9 space-y-6">
           
           {/* Mobile quick switcher - extremely responsive */}
-          <div className="block lg:hidden bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-            <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 mb-2">Select Active Workspace Module</label>
+          <div className="block lg:hidden bg-slate-900 border border-slate-850 rounded-2xl p-4 shadow-xl">
+            <label className="block text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400 mb-2">
+              🛡️ ACTIVE SYSTEMS MODULE ({currentUser.role})
+            </label>
             <select 
               value={activeTab} 
               onChange={(e) => setActiveTab(e.target.value as WorkspaceTab)}
-              className="w-full bg-slate-55 border border-slate-205 rounded-xl p-3 text-xs font-bold uppercase tracking-wide text-slate-700 focus:outline-none cursor-pointer"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-bold uppercase tracking-wider text-emerald-300 focus:outline-none cursor-pointer shadow-inner font-mono"
             >
-              <option value="dashboard">📊 Control Center Dashboard</option>
-              <option value="projects">💼 Projects Board Pool</option>
-              <option value="scout">👥 Talent Scout Pool</option>
-              <option value="chats">💬 Frictionless Chat Client</option>
-              <option value="disputes">⚖️ Mediator Dispute Center</option>
-              <option value="supabase">⚡ Supabase SQL Sync</option>
-              <option value="faq">📝 Compliance & FAQ Hub</option>
+              {currentUser.role === UserRole.ADMIN ? (
+                <>
+                  <option value="dashboard" className="bg-slate-900 text-slate-200">📊 Admin Control Panel</option>
+                  <option value="disputes" className="bg-slate-900 text-slate-200">⚖️ Mediator Dispute Center</option>
+                  <option value="supabase" className="bg-slate-900 text-slate-200">⚡ Supabase SQL Sync</option>
+                  <option value="faq" className="bg-slate-900 text-slate-200">📝 Compliance & FAQ Hub</option>
+                </>
+              ) : (
+                <>
+                  <option value="dashboard" className="bg-slate-900 text-slate-200">📊 Control Center</option>
+                  <option value="projects" className="bg-slate-900 text-slate-200">💼 Projects Board Pool</option>
+                  <option value="scout" className="bg-slate-900 text-slate-200">👥 Talent Scout Pool</option>
+                  <option value="chats" className="bg-slate-900 text-slate-200">💬 Frictionless Chat Client</option>
+                  <option value="faq" className="bg-slate-900 text-slate-200">📝 Compliance & FAQ Hub</option>
+                </>
+              )}
             </select>
           </div>
 
@@ -547,6 +593,8 @@ export default function App() {
                   contactRequests={contactRequests}
                   projectStages={projectStages}
                   ndas={ndas}
+                  reviews={reviews}
+                  onPostReview={handlePostReview}
                   onApply={handleApplyToProject}
                   onRespondInvite={handleRespondInvite}
                   onRespondContact={handleRespondContact}
@@ -571,6 +619,9 @@ export default function App() {
                   developersList={developersOnly}
                   projectStages={projectStages}
                   ndas={ndas}
+                  reviews={reviews}
+                  onPostReview={handlePostReview}
+                  onUpdateProjectStatus={handleUpdateProjectStatus}
                   onPostProject={handlePostProject}
                   onInviteDeveloper={handleInviteDeveloper}
                   onUpdateApplicationStatus={handleUpdateApplicationStatus}

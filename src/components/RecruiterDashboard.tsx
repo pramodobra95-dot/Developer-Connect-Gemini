@@ -39,7 +39,8 @@ import {
   ProjectStatus, 
   ApplicationStatus,
   ProjectStage,
-  NDA
+  NDA,
+  Review
 } from "../types.js";
 
 interface RecruiterDashboardProps {
@@ -52,6 +53,9 @@ interface RecruiterDashboardProps {
   developersList: DeveloperProfile[];
   projectStages: ProjectStage[];
   ndas: NDA[];
+  reviews?: Review[];
+  onPostReview?: (review: Partial<Review>) => void;
+  onUpdateProjectStatus?: (projectId: string, status: ProjectStatus) => void;
   onPostProject: (project: Partial<Project>) => void;
   onInviteDeveloper: (projectId: string, devId: string, message: string) => void;
   onUpdateApplicationStatus: (appId: string, status: ApplicationStatus) => void;
@@ -77,6 +81,9 @@ export default function RecruiterDashboard({
   developersList,
   projectStages,
   ndas,
+  reviews = [],
+  onPostReview,
+  onUpdateProjectStatus,
   onPostProject,
   onInviteDeveloper,
   onUpdateApplicationStatus,
@@ -116,6 +123,7 @@ export default function RecruiterDashboard({
 
   // Selected developer profile detail view
   const [selectedDevId, setSelectedDevId] = useState<string | null>(null);
+  const [projectStatusFilter, setProjectStatusFilter] = useState<"ALL" | "OPEN" | "IN_REVIEW" | "CLOSED">("ALL");
 
   // Recruiter profile edit states
   const [recFullName, setRecFullName] = useState(recProfile.fullName || "");
@@ -421,15 +429,73 @@ export default function RecruiterDashboard({
 
           {/* Recruiter Published Projects */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
-            <h3 className="font-sans font-bold text-slate-900 text-sm">Your Posted Requirements</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-sans font-bold text-slate-900 text-sm">Your Posted Requirements</h3>
+                <p className="text-[11px] text-slate-500">View and update the status of your active or completed requirements.</p>
+              </div>
+              
+              {/* Dynamic Tabs */}
+              <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 w-fit">
+                {(["ALL", "OPEN", "IN_REVIEW", "CLOSED"] as const).map((statusVal) => {
+                  const count = statusVal === "ALL" 
+                    ? myProjects.length 
+                    : myProjects.filter(p => p.status === statusVal).length;
+                  return (
+                    <button
+                      key={statusVal}
+                      type="button"
+                      onClick={() => setProjectStatusFilter(statusVal)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer flex items-center gap-1.5 ${
+                        projectStatusFilter === statusVal
+                          ? "bg-white text-brand-teal shadow-xs border border-slate-200/50 font-bold"
+                          : "text-slate-500 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>
+                        {statusVal === "ALL" ? "All" : statusVal === "IN_REVIEW" ? "In-Review" : statusVal.charAt(0) + statusVal.slice(1).toLowerCase()}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        projectStatusFilter === statusVal ? "bg-brand-teal-light text-brand-teal font-extrabold" : "bg-slate-200/80 text-slate-600"
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="divide-y divide-slate-100">
-              {myProjects.length === 0 ? (
-                <p className="text-xs text-slate-500 py-3">No published requirements. Head over to "Post Job" to configure with AI assistance!</p>
-              ) : (
-                myProjects.map((proj) => (
-                  <div key={proj.id} className="py-4 flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 mb-1">{proj.title}</h4>
+              {(() => {
+                const filteredList = myProjects.filter(p => {
+                  if (projectStatusFilter === "ALL") return true;
+                  return p.status === projectStatusFilter;
+                });
+
+                if (filteredList.length === 0) {
+                  return (
+                    <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 mt-2">
+                      <p className="text-xs text-slate-500 font-sans">No published requirements found under "{projectStatusFilter}" status.</p>
+                    </div>
+                  );
+                }
+
+                return filteredList.map((proj) => (
+                  <div key={proj.id} className="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-slate-900">{proj.title}</h4>
+                        <span className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-full border ${
+                          proj.status === ProjectStatus.OPEN 
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+                            : proj.status === ProjectStatus.IN_REVIEW 
+                            ? "bg-amber-50 text-amber-800 border-amber-200" 
+                            : "bg-slate-105 text-slate-700 border-slate-305"
+                        }`}>
+                          {proj.status === ProjectStatus.IN_REVIEW ? "In-Review" : proj.status}
+                        </span>
+                      </div>
                       <p className="text-xs text-slate-600 leading-relaxed max-w-xl">{proj.description}</p>
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {proj.techStack.map(s => (
@@ -439,15 +505,35 @@ export default function RecruiterDashboard({
                         ))}
                       </div>
                     </div>
-                    <div className="text-right flex flex-col items-end gap-1.5">
-                      <span className="text-xs font-mono font-bold text-slate-900">₹{proj.budget.toLocaleString()}</span>
-                      <span className="text-[10px] text-slate-550 font-mono uppercase bg-slate-50 px-2 py-0.5 rounded border border-slate-200/80">
-                        {proj.hiringType}
-                      </span>
+                    <div className="flex flex-row md:flex-col justify-between md:justify-center items-center md:items-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+                      <div className="text-left md:text-right flex flex-col md:items-end">
+                        <span className="text-xs font-mono font-bold text-slate-900">₹{proj.budget.toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-500 font-mono uppercase">
+                          {proj.hiringType}
+                        </span>
+                      </div>
+                      
+                      {/* Quick Status Control Dropdown */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-mono text-slate-400 font-bold uppercase">Change:</span>
+                        <select
+                          value={proj.status}
+                          onChange={(e) => {
+                            if (onUpdateProjectStatus) {
+                              onUpdateProjectStatus(proj.id, e.target.value as ProjectStatus);
+                            }
+                          }}
+                          className="bg-white border border-slate-200 text-[10px] font-semibold text-slate-700 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-brand-teal cursor-pointer shadow-sm"
+                        >
+                          <option value={ProjectStatus.OPEN}>Open</option>
+                          <option value={ProjectStatus.IN_REVIEW}>In-Review</option>
+                          <option value={ProjectStatus.CLOSED}>Closed</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
+                ));
+              })()}
             </div>
           </div>
 
@@ -914,6 +1000,105 @@ export default function RecruiterDashboard({
                             </div>
                           </div>
                         </div>
+
+                        {/* Interactive Client Ratings & Reviews Feed */}
+                        <div className="space-y-4 pt-4 border-t border-slate-100">
+                          <h4 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">Vetted Professional Performance & Review Logs</h4>
+                          
+                          {/* List existing reviews left on this developer */}
+                          {(() => {
+                            const developerReviews = reviews.filter(r => r.revieweeId === dev.userId);
+                            return (
+                              <div className="space-y-3">
+                                {developerReviews.length === 0 ? (
+                                  <p className="text-xs text-slate-500 italic pb-2">No reviews have been submitted for this developer yet. Be the first to leave feedback if you have worked together!</p>
+                                ) : (
+                                  developerReviews.map((rev) => (
+                                    <div key={rev.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                      <div className="flex justify-between items-start gap-2 mb-1.5">
+                                        <div>
+                                          <span className="text-xs font-bold text-slate-800">{rev.reviewerName}</span>
+                                          <span className="text-[10px] text-slate-400 font-mono ml-2">
+                                            {new Date(rev.createdAt).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center text-amber-550 font-mono text-xs font-bold">
+                                          {"★".repeat(rev.rating)}
+                                          {"☆".repeat(5 - rev.rating)}
+                                          <span className="ml-1 text-slate-600">({rev.rating}/5)</span>
+                                        </div>
+                                      </div>
+                                      <p className="text-xs text-slate-605 italic font-sans">"{rev.comment}"</p>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Post Review Form */}
+                          <div className="bg-slate-55 border border-slate-200 rounded-xl p-4 mt-3">
+                            <h5 className="text-xs font-bold text-slate-900 mb-2 font-sans">Submit a Vetted Performance Review</h5>
+                            <form 
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                const form = e.currentTarget;
+                                const rating = Number((form.elements.namedItem("rating") as HTMLSelectElement).value);
+                                const comment = (form.elements.namedItem("comment") as HTMLTextAreaElement).value;
+                                
+                                if (!comment.trim()) {
+                                  alert("Please write a comment.");
+                                  return;
+                                }
+
+                                if (onPostReview) {
+                                  onPostReview({
+                                    projectId: matchedDevApps[0]?.projectId || "direct-hire",
+                                    reviewerId: currentUser.id,
+                                    reviewerName: recProfile.companyName || recProfile.fullName || "Recruiter Panel",
+                                    revieweeId: dev.userId,
+                                    rating,
+                                    comment
+                                  });
+                                  form.reset();
+                                }
+                              }}
+                              className="space-y-3"
+                            >
+                              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-slate-655 font-semibold">Stars Rating:</label>
+                                  <select 
+                                    name="rating"
+                                    className="bg-white border border-slate-200 text-xs font-bold rounded-lg px-2.5 py-1 outline-none pointer-events-auto"
+                                    defaultValue="5"
+                                  >
+                                    <option value="5">★★★★★ Outstanding Performance (5/5)</option>
+                                    <option value="4">★★★★☆ Solid Work Quality (4/5)</option>
+                                    <option value="3">★★★☆☆ Average Delivery (3/5)</option>
+                                    <option value="2">★★☆☆☆ Needs Clear Guidance (2/5)</option>
+                                    <option value="1">★☆☆☆☆ Below Requirement Baseline (1/5)</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div>
+                                <textarea
+                                  name="comment"
+                                  rows={2}
+                                  placeholder="Leave formal feedback. Comment on alignment to deadlines, quality of Deliverables, systems competency, and coding hygiene..."
+                                  className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-750 placeholder-slate-400 focus:ring-1 focus:ring-brand-teal outline-none"
+                                />
+                              </div>
+                              <button
+                                type="submit"
+                                className="bg-brand-teal text-white text-[11px] font-bold px-3 py-1.5 rounded-lg cursor-pointer hover:bg-teal-700 transition"
+                              >
+                                Publish Review Verified Log
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+
                       </div>
                     </div>
                   </div>

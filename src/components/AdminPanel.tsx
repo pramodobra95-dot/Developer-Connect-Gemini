@@ -291,10 +291,33 @@ export default function AdminPanel({
                   return (
                     <tr key={usr.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="p-4">
-                        {usr.devProfile?.fullName || usr.recProfile?.companyName || "No Title"}
-                        <p className="text-[10px] font-semibold text-brand-teal tracking-wide uppercase mt-1">
-                          {usr.role}
-                        </p>
+                        <span className="font-bold text-slate-900 block mb-1">
+                          {usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email.split('@')[0]}
+                        </span>
+                        
+                        {/* Interactive Role Management */}
+                        {usr.email.toLowerCase().trim() === "info.bouuz@gmail.com" ? (
+                          <p className="text-[10px] font-bold text-rose-600 tracking-wide uppercase font-mono bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md inline-block">
+                            ADMIN (SYSTEM OWNER)
+                          </p>
+                        ) : (
+                          <div className="inline-block">
+                            <select
+                              value={usr.role}
+                              onChange={(e) => {
+                                const newRole = e.target.value;
+                                if (window.confirm(`Are you sure you want to change the role of ${usr.email} to ${newRole}?`)) {
+                                  onUpdateUser(usr.id, { role: newRole });
+                                }
+                              }}
+                              className="bg-slate-50 hover:bg-slate-100 border border-slate-250 text-[10px] font-bold text-slate-700 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-brand-teal transition-all cursor-pointer font-sans"
+                            >
+                              <option value="DEVELOPER">DEVELOPER ROLE</option>
+                              <option value="RECRUITER">RECRUITER ROLE</option>
+                              <option value="ADMIN">ADMIN ROLE</option>
+                            </select>
+                          </div>
+                        )}
                       </td>
                       <td className="p-4 font-mono text-xs text-slate-650">{usr.email}</td>
                       <td className="p-4">

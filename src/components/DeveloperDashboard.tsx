@@ -29,7 +29,8 @@ import {
   ProjectStatus, 
   ApplicationStatus, 
   InviteStatus, 
-  ContactAccessRequest 
+  ContactAccessRequest,
+  Review
 } from "../types.js";
 
 interface DeveloperDashboardProps {
@@ -41,6 +42,8 @@ interface DeveloperDashboardProps {
   contactRequests: ContactAccessRequest[];
   projectStages?: any[];
   ndas?: any[];
+  reviews?: Review[];
+  onPostReview?: (review: Partial<Review>) => void;
   onApply: (projectId: string, cover: string, proposedRate: number, avail: string, timeline: string) => void;
   onRespondInvite: (inviteId: string, status: InviteStatus) => void;
   onRespondContact: (requestId: string, status: "APPROVED" | "REJECTED") => void;
@@ -62,6 +65,8 @@ export default function DeveloperDashboard({
   contactRequests,
   projectStages = [],
   ndas = [],
+  reviews = [],
+  onPostReview,
   onApply,
   onRespondInvite,
   onRespondContact,
@@ -1016,6 +1021,109 @@ export default function DeveloperDashboard({
                           </span>
                         ))}
                       </div>
+
+                      {/* Recruiter / Employer Reputation Log */}
+                      {(() => {
+                        const recruiterReviews = reviews.filter(r => r.revieweeId === proj.recruiterId);
+                        const avgRating = recruiterReviews.length > 0 
+                          ? (recruiterReviews.reduce((acc, curr) => acc + curr.rating, 0) / recruiterReviews.length).toFixed(1)
+                          : null;
+                        return (
+                          <div className="mt-3 bg-slate-50 border border-slate-200/80 p-3 rounded-xl space-y-2 text-[11px]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-mono font-bold tracking-wider text-slate-400 uppercase">Recruiter Scorecard:</span>
+                              {avgRating ? (
+                                <div className="flex items-center text-amber-500 font-mono text-[11px] font-bold">
+                                  {"★".repeat(Math.round(Number(avgRating)))}
+                                  {"☆".repeat(5 - Math.round(Number(avgRating)))}
+                                  <span className="ml-1 text-slate-700 font-bold">({avgRating}/5)</span>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-450 italic font-medium">New Employer (No Ratings Yet)</span>
+                              )}
+                            </div>
+
+                            {/* Accordion or expand/collapse for employer reviews */}
+                            <div className="space-y-2">
+                              {recruiterReviews.length > 0 && (
+                                <div className="max-h-24 overflow-y-auto space-y-1.5 divide-y divide-slate-200/50 pr-1 select-text">
+                                  {recruiterReviews.map(rev => (
+                                    <div key={rev.id} className="pt-1.5 first:pt-0">
+                                      <div className="flex justify-between items-center text-[10px] text-slate-400 mb-0.5">
+                                        <span className="font-semibold text-slate-600">{rev.reviewerName}</span>
+                                        <span>{new Date(rev.createdAt).toLocaleDateString()}</span>
+                                      </div>
+                                      <p className="text-[10px] text-slate-600 italic">"{rev.comment}"</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Form to leave a review of this recruiter */}
+                              <details className="group border-t border-slate-200/60 pt-2 pointer-events-auto">
+                                <summary className="text-[10px] text-brand-teal font-extrabold hover:underline cursor-pointer list-none flex items-center gap-1 focus:outline-none">
+                                  <span className="transition-transform group-open:rotate-90">▶</span>
+                                  <span>Write a Review for Employer</span>
+                                </summary>
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const form = e.currentTarget;
+                                    const rating = Number((form.elements.namedItem("rating") as HTMLSelectElement).value);
+                                    const comment = (form.elements.namedItem("comment") as HTMLTextAreaElement).value;
+                                    
+                                    if (!comment.trim()) {
+                                      alert("Please write feedback first.");
+                                      return;
+                                    }
+
+                                    if (onPostReview) {
+                                      onPostReview({
+                                        projectId: proj.id,
+                                        reviewerId: currentUser.id,
+                                        reviewerName: devProfile.fullName || "Vetted Developer",
+                                        revieweeId: proj.recruiterId,
+                                        rating,
+                                        comment
+                                      });
+                                      form.reset();
+                                      alert("Employer review posted successfully!");
+                                    }
+                                  }}
+                                  className="space-y-2 mt-2 bg-white p-2.5 rounded-lg border border-slate-200"
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <label className="text-[10px] text-slate-500 font-bold">Select Stars:</label>
+                                    <select
+                                      name="rating"
+                                      className="bg-slate-50 border border-slate-200 text-[10px] text-slate-700 font-bold rounded-md px-1.5 py-0.5"
+                                      defaultValue="5"
+                                    >
+                                      <option value="5">5/5 - Prompt & Clean Coordination</option>
+                                      <option value="4">4/5 - Professional Engagement</option>
+                                      <option value="3">3/5 - Solid Response Delivery</option>
+                                      <option value="2">2/5 - Delayed Payments / Comm</option>
+                                      <option value="1">1/5 - Poor Cooperation</option>
+                                    </select>
+                                  </div>
+                                  <textarea
+                                    name="comment"
+                                    rows={1}
+                                    placeholder="Help other freelancers. Share deadline flexibility, clear specifications, and payment transparency..."
+                                    className="w-full bg-slate-50 border border-slate-205 text-[10px] rounded p-1.5 placeholder-slate-400 font-light focus:outline-none focus:ring-1 focus:ring-brand-teal"
+                                  />
+                                  <button
+                                    type="submit"
+                                    className="w-full text-center bg-brand-teal/10 hover:bg-brand-teal text-brand-teal hover:text-white text-[9px] font-bold py-1 rounded transition-colors cursor-pointer"
+                                  >
+                                    Publish Employer Feedback
+                                  </button>
+                                </form>
+                              </details>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="pt-6 border-t border-slate-100 mt-6 flex flex-wrap items-center justify-between gap-4">

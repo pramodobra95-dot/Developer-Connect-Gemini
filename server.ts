@@ -23,7 +23,8 @@ import {
   Dispute, 
   DisputeStatus,
   ProjectStage,
-  NDA
+  NDA,
+  Review
 } from "./src/types.js";
 import {
   isSupabaseConfigured,
@@ -78,7 +79,7 @@ if (geminiApiKey) {
 // ----------------------------------------------------
 // Mock Databases
 // ----------------------------------------------------
-let currentUserId = "guest"; // Default session user (guest = landing page)
+let currentUserId = "admin"; // Default session user (admin = administrator)
 
 let users = [
   { id: "dev-aryan", email: "aryan.sharma@gmail.com", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2026-01-15T10:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true } },
@@ -291,6 +292,29 @@ let ndas: NDA[] = [
 let notifications: Notification[] = [
   { id: "not-1", userId: "dev-aryan", title: "New Interview Request", description: "TechCorp invited you to chat about 'Bento-Style Dashboard'.", type: "invite", isRead: false, createdAt: "2026-05-28T18:00:00Z" },
   { id: "not-2", userId: "rec-nexa", title: "New Application Received", description: "Aryan Sharma applied to your project.", type: "application", isRead: false, createdAt: "2026-05-28T18:10:00Z" }
+];
+
+let reviews: Review[] = [
+  {
+    id: "rev-1",
+    projectId: "proj-ecommerce",
+    reviewerId: "rec-nexa",
+    reviewerName: "Nexa Systems (Sarah J. Lans)",
+    revieweeId: "dev-aryan",
+    rating: 5,
+    comment: "Aryan Sharma is a remarkable engineer! Migrated our high-capacity microservices API seamlessly. Our page response times decreased by 40% with absolute database consistency! Outstanding.",
+    createdAt: "2026-05-28T12:00:00Z"
+  },
+  {
+    id: "rev-2",
+    projectId: "proj-ecommerce",
+    reviewerId: "dev-aryan",
+    reviewerName: "Aryan Sharma",
+    revieweeId: "rec-nexa",
+    rating: 5,
+    comment: "Working with Nexa Systems was fantastic. Clear sprint parameters, instant escrow pre-funding, and highly responsive feedback loop throughout the development architecture.",
+    createdAt: "2026-05-29T10:00:00Z"
+  }
 ];
 
 // Helper to push admin notifications
@@ -523,10 +547,18 @@ async function startServer() {
   });
 
   app.post("/api/session/login", (req, res) => {
-    const { email, role } = req.body;
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
+    
     // Find matching user by email
-    const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
     if (user) {
+      if (user.role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
+        return res.status(403).json({ error: "Access Denied. Only info.bouuz@gmail.com can log in with administrator privileges." });
+      }
       if (user.isSuspended) {
         return res.status(403).json({ error: "This account has been suspended by administration." });
       }
@@ -535,7 +567,7 @@ async function startServer() {
       const recProfile = recruiterProfiles[user.id] || null;
       res.json({ success: true, user, devProfile, recProfile });
     } else {
-      res.status(401).json({ error: "Invalid email credentials. Use sample demo emails or register a new account." });
+      res.status(401).json({ error: "Invalid credentials. If you are registering a new user, please use the Signup tab." });
     }
   });
 
@@ -546,9 +578,18 @@ async function startServer() {
 
   app.post("/api/session/signup", (req, res) => {
     const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
-    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
+
+    // Check if they tried to register as ADMIN but are not info.bouuz@gmail.com
+    if (role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
+      return res.status(403).json({ error: "Unauthorized role assignment. Only info.bouuz@gmail.com can be registered as an Administrator." });
+    }
+
     // Check if email already exists
-    const existing = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    const existing = users.find(u => u.email.toLowerCase().trim() === targetEmail);
     if (existing) {
       return res.status(400).json({ error: "Email already registered. Please login instead." });
     }
@@ -603,7 +644,7 @@ async function startServer() {
 
     currentUserId = id;
     syncUser(newUser);
-    addAdminNotification("New User Registered", `${fullName || companyName} signed up as a new ${role}.`);
+    addAdminNotification("New User Registered", `${fullName || companyName || "New user"} signed up as a new ${role}.`);
     res.json({ 
       success: true, 
       user: newUser, 
@@ -641,7 +682,45 @@ async function startServer() {
     if (userIndex !== -1) {
       if (typeof isVerified === "boolean") users[userIndex].isVerified = isVerified;
       if (typeof isSuspended === "boolean") users[userIndex].isSuspended = isSuspended;
-      if (role) users[userIndex].role = role;
+      if (role) {
+        if (role === UserRole.ADMIN && users[userIndex].email.toLowerCase().trim() !== "info.bouuz@gmail.com") {
+          return res.status(403).json({ error: "Only info.bouuz@gmail.com is authorized to hold the Administrator role." });
+        }
+        users[userIndex].role = role;
+        
+        // Populate profile if role was switched and the target profile does not exist yet
+        const id = userId;
+        if (role === UserRole.DEVELOPER && !developerProfiles[id]) {
+          developerProfiles[id] = {
+            userId: id,
+            fullName: "Developer Candidate",
+            headline: "Full-Stack Engineer",
+            bio: "Passionate React & TypeScript systems engineer.",
+            skills: ["React", "TypeScript", "Node.js", "Tailwind CSS"],
+            techStack: ["React", "Tailwind CSS"],
+            experienceYears: 3,
+            availability: "Both",
+            rates: { hourly: 600, weekly: 22000, monthly: 85000, projectMin: 10000 },
+            location: "Bengaluru, India",
+            socials: {},
+            isContactVisible: false,
+            avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(users[userIndex].email || "Dev")}`,
+            analytics: { profileViews: 0, invitesCount: 0, applicationsSent: 0, acceptedProjects: 0 }
+          };
+          syncDevProfile(id, developerProfiles[id]);
+        } else if (role === UserRole.RECRUITER && !recruiterProfiles[id]) {
+          recruiterProfiles[id] = {
+            userId: id,
+            companyName: "Startup Solutions Ltd",
+            industry: "Information Technology",
+            companySize: "11-50",
+            aboutCompany: "Next-generation high performance product incubator.",
+            fullName: "Talent Lead",
+            avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(users[userIndex].email || "Rec")}`
+          };
+          syncRecProfile(id, recruiterProfiles[id]);
+        }
+      }
       if (notificationPreferences) {
         users[userIndex].notificationPreferences = {
           ...users[userIndex].notificationPreferences,
@@ -1592,6 +1671,30 @@ Instructions:
     } else {
       res.status(404).json({ error: "Notification not found" });
     }
+  });
+
+  // Reviews APIs
+  app.get("/api/reviews", (req, res) => {
+    res.json(reviews);
+  });
+
+  app.post("/api/reviews", (req, res) => {
+    const { projectId, reviewerId, reviewerName, revieweeId, rating, comment } = req.body;
+    if (!reviewerId || !revieweeId || !rating || !comment) {
+      return res.status(400).json({ error: "Missing required review parameters." });
+    }
+    const newReview: Review = {
+      id: "rev-" + Math.random().toString(36).substring(2, 9),
+      projectId: projectId || "",
+      reviewerId,
+      reviewerName,
+      revieweeId,
+      rating: Number(rating),
+      comment,
+      createdAt: new Date().toISOString()
+    };
+    reviews.push(newReview);
+    res.json(newReview);
   });
 
   // Supabase connection and status query endpoint (for administrative views or diagnostics panel)

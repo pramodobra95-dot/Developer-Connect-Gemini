@@ -230,3 +230,16 @@ export interface NDA {
   createdAt: string;
 }
 
+export interface Review {
+  id: string;
+  projectId: string;
+  reviewerId: string;
+  reviewerName: string;
+  revieweeId: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+}
+
+
+
