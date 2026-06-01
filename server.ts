@@ -138,127 +138,104 @@ async function initializeSupabaseSync() {
     console.log("🔄 Hydrating local in-memory DB tables with Supabase database content...");
     try {
       // 1. Users
-      const dbUsers = await dbGetUsers(users);
-      if (dbUsers && dbUsers.length > 0) {
-        dbUsers.forEach(dbU => {
-          const idx = users.findIndex(u => u.id === dbU.id);
-          if (idx !== -1) users[idx] = dbU;
-          else users.push(dbU);
-        });
+      const dbUsers = await dbGetUsers([]);
+      if (dbUsers) {
+        users.length = 0;
+        users.push(...dbUsers);
       }
 
       // 2. Developer Profiles
-      const dbDevProfs = await dbGetDeveloperProfiles(developerProfiles);
+      const dbDevProfs = await dbGetDeveloperProfiles({});
       if (dbDevProfs) {
+        for (const key in developerProfiles) {
+          delete developerProfiles[key];
+        }
         Object.assign(developerProfiles, dbDevProfs);
       }
 
       // 3. Recruiter Profiles
-      const dbRecProfs = await dbGetRecruiterProfiles(recruiterProfiles);
+      const dbRecProfs = await dbGetRecruiterProfiles({});
       if (dbRecProfs) {
+        for (const key in recruiterProfiles) {
+          delete recruiterProfiles[key];
+        }
         Object.assign(recruiterProfiles, dbRecProfs);
       }
 
       // 4. Projects
-      const dbProjs = await dbGetProjects(projects);
-      if (dbProjs && dbProjs.length > 0) {
-        dbProjs.forEach(dbP => {
-          const idx = projects.findIndex(p => p.id === dbP.id);
-          if (idx !== -1) projects[idx] = dbP;
-          else projects.push(dbP);
-        });
+      const dbProjs = await dbGetProjects([]);
+      if (dbProjs) {
+        projects.length = 0;
+        projects.push(...dbProjs);
       }
 
       // 5. Applications
-      const dbApps = await dbGetApplications(applications);
-      if (dbApps && dbApps.length > 0) {
-        dbApps.forEach(dbA => {
-          const idx = applications.findIndex(a => a.id === dbA.id);
-          if (idx !== -1) applications[idx] = dbA;
-          else applications.push(dbA);
-        });
+      const dbApps = await dbGetApplications([]);
+      if (dbApps) {
+        applications.length = 0;
+        applications.push(...dbApps);
       }
 
       // 6. Project Stages
-      const dbStages = await dbGetProjectStages(projectStages);
-      if (dbStages && dbStages.length > 0) {
-        dbStages.forEach(dbS => {
-          const idx = projectStages.findIndex(s => s.id === dbS.id);
-          if (idx !== -1) projectStages[idx] = dbS;
-          else projectStages.push(dbS);
-        });
+      const dbStages = await dbGetProjectStages([]);
+      if (dbStages) {
+        projectStages.length = 0;
+        projectStages.push(...dbStages);
       }
 
       // 7. NDAs
-      const dbNdas = await dbGetNDAs(ndas);
-      if (dbNdas && dbNdas.length > 0) {
-        dbNdas.forEach(dbN => {
-          const idx = ndas.findIndex(n => n.id === dbN.id);
-          if (idx !== -1) ndas[idx] = dbN;
-          else ndas.push(dbN);
-        });
+      const dbNdas = await dbGetNDAs([]);
+      if (dbNdas) {
+        ndas.length = 0;
+        ndas.push(...dbNdas);
       }
 
       // 8. Chats
-      const dbChatsList = await dbGetChats(chats);
-      if (dbChatsList && dbChatsList.length > 0) {
-        dbChatsList.forEach(dbC => {
-          const idx = chats.findIndex(c => c.id === dbC.id);
-          if (idx !== -1) chats[idx] = dbC;
-          else chats.push(dbC);
-        });
+      const dbChatsList = await dbGetChats([]);
+      if (dbChatsList) {
+        chats.length = 0;
+        chats.push(...dbChatsList);
       }
 
-      // Messages (individual chat fetching)
+      // Messages (fetching messages of active chats)
+      const freshMessages: Message[] = [];
       for (const chat of chats) {
         const dbMsgs = await dbGetMessages(chat.id, []);
         if (dbMsgs && dbMsgs.length > 0) {
-          dbMsgs.forEach(dbM => {
-            const idx = messages.findIndex(m => m.id === dbM.id);
-            if (idx !== -1) messages[idx] = dbM;
-            else messages.push(dbM);
-          });
+          freshMessages.push(...dbMsgs);
         }
+      }
+      if (freshMessages.length > 0 || chats.length > 0) {
+        messages.length = 0;
+        messages.push(...freshMessages);
       }
 
       // 9. Notifications
-      const dbNotifs = await dbGetNotifications(notifications);
-      if (dbNotifs && dbNotifs.length > 0) {
-        dbNotifs.forEach(dbN => {
-          const idx = notifications.findIndex(n => n.id === dbN.id);
-          if (idx !== -1) notifications[idx] = dbN;
-          else notifications.push(dbN);
-        });
+      const dbNotifs = await dbGetNotifications([]);
+      if (dbNotifs) {
+        notifications.length = 0;
+        notifications.push(...dbNotifs);
       }
 
       // 10. Disputes
-      const dbDisps = await dbGetDisputes(disputes);
-      if (dbDisps && dbDisps.length > 0) {
-        dbDisps.forEach(dbD => {
-          const idx = disputes.findIndex(d => d.id === dbD.id);
-          if (idx !== -1) disputes[idx] = dbD;
-          else disputes.push(dbD);
-        });
+      const dbDisps = await dbGetDisputes([]);
+      if (dbDisps) {
+        disputes.length = 0;
+        disputes.push(...dbDisps);
       }
 
       // 11. Invites
-      const dbInvs = await dbGetInvites(invites);
-      if (dbInvs && dbInvs.length > 0) {
-        dbInvs.forEach(dbI => {
-          const idx = invites.findIndex(i => i.id === dbI.id);
-          if (idx !== -1) invites[idx] = dbI;
-          else invites.push(dbI);
-        });
+      const dbInvs = await dbGetInvites([]);
+      if (dbInvs) {
+        invites.length = 0;
+        invites.push(...dbInvs);
       }
 
       // 12. Contact requests
-      const dbCons = await dbGetContactRequests(contactAccessRequests);
-      if (dbCons && dbCons.length > 0) {
-        dbCons.forEach(dbC => {
-          const idx = contactAccessRequests.findIndex(c => c.id === dbC.id);
-          if (idx !== -1) contactAccessRequests[idx] = dbC;
-          else contactAccessRequests.push(dbC);
-        });
+      const dbCons = await dbGetContactRequests([]);
+      if (dbCons) {
+        contactAccessRequests.length = 0;
+        contactAccessRequests.push(...dbCons);
       }
 
       console.log("✨ Supabase in-memory sync hydration completed successfully.");
@@ -270,43 +247,121 @@ async function initializeSupabaseSync() {
 
 // Background Replication Triggers
 async function syncUser(user: any) {
-  if (isSupabaseConfigured()) dbSaveUser(user).catch(e => console.error("Sync user fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveUser(user);
+    } catch (e) {
+      console.error("Sync user fail", e);
+    }
+  }
 }
 async function syncDevProfile(userId: string, profile: any) {
-  if (isSupabaseConfigured()) dbSaveDeveloperProfile(userId, profile).catch(e => console.error("Sync dev profile fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveDeveloperProfile(userId, profile);
+    } catch (e) {
+      console.error("Sync dev profile fail", e);
+    }
+  }
 }
 async function syncRecProfile(userId: string, profile: any) {
-  if (isSupabaseConfigured()) dbSaveRecruiterProfile(userId, profile).catch(e => console.error("Sync recruiter profile fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveRecruiterProfile(userId, profile);
+    } catch (e) {
+      console.error("Sync recruiter profile fail", e);
+    }
+  }
 }
 async function syncProject(proj: any) {
-  if (isSupabaseConfigured()) dbSaveProject(proj).catch(e => console.error("Sync project fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveProject(proj);
+    } catch (e) {
+      console.error("Sync project fail", e);
+    }
+  }
 }
 async function syncApplication(app: any) {
-  if (isSupabaseConfigured()) dbSaveApplication(app).catch(e => console.error("Sync application fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveApplication(app);
+    } catch (e) {
+      console.error("Sync application fail", e);
+    }
+  }
 }
 async function syncInvite(inv: any) {
-  if (isSupabaseConfigured()) dbSaveInvite(inv).catch(e => console.error("Sync invite fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveInvite(inv);
+    } catch (e) {
+      console.error("Sync invite fail", e);
+    }
+  }
 }
 async function syncContactRequest(req: any) {
-  if (isSupabaseConfigured()) dbSaveContactRequest(req).catch(e => console.error("Sync contact req fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveContactRequest(req);
+    } catch (e) {
+      console.error("Sync contact req fail", e);
+    }
+  }
 }
 async function syncChat(chat: any) {
-  if (isSupabaseConfigured()) dbSaveChat(chat).catch(e => console.error("Sync chat fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveChat(chat);
+    } catch (e) {
+      console.error("Sync chat fail", e);
+    }
+  }
 }
 async function syncMessage(msg: any) {
-  if (isSupabaseConfigured()) dbSaveMessage(msg).catch(e => console.error("Sync message fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveMessage(msg);
+    } catch (e) {
+      console.error("Sync message fail", e);
+    }
+  }
 }
 async function syncProjectStage(stage: any) {
-  if (isSupabaseConfigured()) dbSaveProjectStage(stage).catch(e => console.error("Sync project stage fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveProjectStage(stage);
+    } catch (e) {
+      console.error("Sync project stage fail", e);
+    }
+  }
 }
 async function syncNDA(nda: any) {
-  if (isSupabaseConfigured()) dbSaveNDA(nda).catch(e => console.error("Sync NDA fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveNDA(nda);
+    } catch (e) {
+      console.error("Sync NDA fail", e);
+    }
+  }
 }
 async function syncNotification(notif: any) {
-  if (isSupabaseConfigured()) dbSaveNotification(notif).catch(e => console.error("Sync notification fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveNotification(notif);
+    } catch (e) {
+      console.error("Sync notification fail", e);
+    }
+  }
 }
 async function syncDispute(disp: any) {
-  if (isSupabaseConfigured()) dbSaveDispute(disp).catch(e => console.error("Sync dispute fail", e));
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveDispute(disp);
+    } catch (e) {
+      console.error("Sync dispute fail", e);
+    }
+  }
 }
 
 // ----------------------------------------------------
@@ -322,6 +377,21 @@ async function startServer() {
   });
 
   app.use(express.json());
+
+  // Real-time Supabase request hydration middleware
+  app.use("/api", async (req, res, next) => {
+    if (req.path === "/supabase/status" || req.path === "/session/logout") {
+      return next();
+    }
+    if (isSupabaseConfigured()) {
+      try {
+        await initializeSupabaseSync();
+      } catch (err) {
+        console.error("🔴 Supabase live request middleware hydration failed:", err);
+      }
+    }
+    next();
+  });
 
   // ----------------------------------------------------
   // API Endpoints
@@ -502,7 +572,7 @@ async function startServer() {
     res.json(combined);
   });
 
-  app.post("/api/users/update", (req, res) => {
+  app.post("/api/users/update", async (req, res) => {
     const { userId, isVerified, isSuspended, role, notificationPreferences } = req.body;
     const userIndex = users.findIndex(u => u.id === userId);
     if (userIndex !== -1) {
@@ -533,7 +603,7 @@ async function startServer() {
             avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(users[userIndex].email || "Dev")}`,
             analytics: { profileViews: 0, invitesCount: 0, applicationsSent: 0, acceptedProjects: 0 }
           };
-          syncDevProfile(id, developerProfiles[id]);
+          await syncDevProfile(id, developerProfiles[id]);
         } else if (role === UserRole.RECRUITER && !recruiterProfiles[id]) {
           recruiterProfiles[id] = {
             userId: id,
@@ -544,7 +614,7 @@ async function startServer() {
             fullName: "Talent Lead",
             avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(users[userIndex].email || "Rec")}`
           };
-          syncRecProfile(id, recruiterProfiles[id]);
+          await syncRecProfile(id, recruiterProfiles[id]);
         }
       }
       if (notificationPreferences) {
@@ -553,14 +623,14 @@ async function startServer() {
           ...notificationPreferences
         };
       }
-      syncUser(users[userIndex]);
+      await syncUser(users[userIndex]);
       res.json({ success: true, user: users[userIndex] });
     } else {
       res.status(404).json({ error: "User not found" });
     }
   });
 
-  app.post("/api/users/preferences", (req, res) => {
+  app.post("/api/users/preferences", async (req, res) => {
     if (currentUserId === "guest") {
       return res.status(401).json({ error: "Unauthenticated" });
     }
@@ -573,14 +643,14 @@ async function startServer() {
         ...users[userIndex].notificationPreferences,
         ...req.body
       };
-      syncUser(users[userIndex]);
+      await syncUser(users[userIndex]);
       res.json({ success: true, user: users[userIndex] });
     } else {
       res.status(404).json({ error: "User not found" });
     }
   });
 
-  app.post("/api/users/add", (req, res) => {
+  app.post("/api/users/add", async (req, res) => {
     const { email, role, fullName } = req.body;
     const id = "user-" + Math.random().toString(36).substring(2, 9);
     const newUser = { 
@@ -616,6 +686,8 @@ async function startServer() {
         avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAE1SMwdmyLIju7Ox7ppeEf0bl2ZA-kl8JU9liRcngr4ZoDtexxBK1OisNtbfLpMGyIXBEAVWMPzKZPx0-HrR4-sc65L1bMNsyn7y_WBE1H568KCIwG1AO8A2MZV9il0fc_D7X_Ev6pDqYMUihIj4OT62yi9DAa8yCMKYQNiq0s_u_nUwzJY8b4v5W53KM-quuT0B4kk-HH0vyn-El7WW8IkxIU_bfe5c1sO71QxMpXmG3-0wHWnTcrh5x7TisEuZdpp5D2drNHukU",
         analytics: { profileViews: 0, invitesCount: 0, applicationsSent: 0, acceptedProjects: 0 }
       };
+      await syncUser(newUser);
+      await syncDevProfile(id, developerProfiles[id]);
     } else if (role === UserRole.RECRUITER) {
       recruiterProfiles[id] = {
         userId: id,
@@ -625,6 +697,10 @@ async function startServer() {
         aboutCompany: "About section",
         fullName: "Contact Person"
       };
+      await syncUser(newUser);
+      await syncRecProfile(id, recruiterProfiles[id]);
+    } else {
+      await syncUser(newUser);
     }
     
     res.json({ success: true, user: newUser });
@@ -995,25 +1071,25 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   // Profile management endpoint
-  app.post("/api/profile/developer", (req, res) => {
+  app.post("/api/profile/developer", async (req, res) => {
     const profile = req.body;
     developerProfiles[currentUserId] = {
       ...developerProfiles[currentUserId],
       ...profile,
       userId: currentUserId
     };
-    syncDevProfile(currentUserId, developerProfiles[currentUserId]);
+    await syncDevProfile(currentUserId, developerProfiles[currentUserId]);
     res.json({ success: true, profile: developerProfiles[currentUserId] });
   });
 
-  app.post("/api/profile/recruiter", (req, res) => {
+  app.post("/api/profile/recruiter", async (req, res) => {
     const profile = req.body;
     recruiterProfiles[currentUserId] = {
       ...recruiterProfiles[currentUserId],
       ...profile,
       userId: currentUserId
     };
-    syncRecProfile(currentUserId, recruiterProfiles[currentUserId]);
+    await syncRecProfile(currentUserId, recruiterProfiles[currentUserId]);
     res.json({ success: true, profile: recruiterProfiles[currentUserId] });
   });
 
