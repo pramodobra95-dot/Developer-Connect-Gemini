@@ -137,21 +137,26 @@ export default function AdminPanel({
       {/* Admin Panel Tabs / Bento Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* User Stats Card */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm" id="admin-user-stats-card">
           <h3 className="text-xs font-mono font-bold tracking-wider text-slate-500 uppercase">Active Accounts Info</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase font-mono">Verified Talent</p>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase font-mono">Total Developers</p>
               <p className="text-2xl font-black text-slate-900 mt-1">
-                {usersList.filter(u => u.role === "DEVELOPER" && u.isVerified).length} <span className="text-xs text-slate-400">/ {usersList.filter(u => u.role === "DEVELOPER").length}</span>
+                {usersList.filter(u => u.role === "DEVELOPER").length} 
+                <span className="text-xs text-slate-400 font-normal ml-1">({usersList.filter(u => u.role === "DEVELOPER" && u.isVerified).length} verified)</span>
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-slate-400 font-semibold uppercase font-mono">Active Startups</p>
+              <p className="text-[10px] text-slate-400 font-semibold uppercase font-mono">Total Recruiters</p>
               <p className="text-2xl font-black text-slate-900 mt-1">
                 {usersList.filter(u => u.role === "RECRUITER").length}
               </p>
             </div>
+          </div>
+          <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+            <span className="font-mono text-[10px] uppercase font-bold tracking-wider">Total Users:</span>
+            <span className="font-black text-slate-800">{usersList.length}</span>
           </div>
         </div>
 

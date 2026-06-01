@@ -29,6 +29,7 @@ import {
 import {
   isSupabaseConfigured,
   SUPABASE_SETUP_SQL,
+  dbAuthSignUp,
   dbGetUsers,
   dbSaveUser,
   dbGetDeveloperProfiles,
@@ -370,7 +371,7 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.post("/api/session/signup", (req, res) => {
+  app.post("/api/session/signup", async (req, res) => {
     const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required." });
@@ -388,7 +389,27 @@ async function startServer() {
       return res.status(400).json({ error: "Email already registered. Please login instead." });
     }
 
-    const id = "user-" + Math.random().toString(36).substring(2, 9);
+    let id = "user-" + Math.random().toString(36).substring(2, 9);
+    
+    // If Supabase is active, register in Supabase Auth first
+    if (isSupabaseConfigured()) {
+      try {
+        console.log(`[SUPABASE SIGNUP] Syncing registration of ${targetEmail} directly with Supabase Auth...`);
+        const nameParam = role === "DEVELOPER" ? (fullName || "Candidate") : (fullName || "Representative");
+        const companyParam = companyName || "Startup Solutions Ltd";
+        const sbUser = await dbAuthSignUp(targetEmail, role, nameParam, companyParam);
+        if (sbUser && sbUser.id) {
+          id = sbUser.id; // Override id with real Supabase uuid
+          console.log(`🟢 [SUPABASE SIGNUP] Overrode local ID with real Supabase UUID: ${id}`);
+        }
+      } catch (sbErr: any) {
+        console.error("🔴 Supabase Auth signup failed:", sbErr?.message || sbErr);
+        return res.status(400).json({ 
+          error: `Supabase authentication registration failed: ${sbErr?.message || "Verify your connection or user quota rules."}` 
+        });
+      }
+    }
+
     const newUser = { 
       id, 
       email: email.trim(), 
@@ -422,7 +443,8 @@ async function startServer() {
         avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(fullName || "Dev")}`,
         analytics: { profileViews: 0, invitesCount: 0, applicationsSent: 0, acceptedProjects: 0 }
       };
-      syncDevProfile(id, developerProfiles[id]);
+      await syncUser(newUser);
+      await syncDevProfile(id, developerProfiles[id]);
     } else if (role === UserRole.RECRUITER) {
       recruiterProfiles[id] = {
         userId: id,
@@ -433,11 +455,13 @@ async function startServer() {
         fullName: fullName || "Talent Lead",
         avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(companyName || "Rec")}`
       };
-      syncRecProfile(id, recruiterProfiles[id]);
+      await syncUser(newUser);
+      await syncRecProfile(id, recruiterProfiles[id]);
+    } else {
+      await syncUser(newUser);
     }
 
     currentUserId = id;
-    syncUser(newUser);
     addAdminNotification("New User Registered", `${fullName || companyName || "New user"} signed up as a new ${role}.`);
     res.json({ 
       success: true, 
@@ -459,7 +483,15 @@ async function startServer() {
   });
 
   // Users endpoint (useful for Admin list)
-  app.get("/api/users", (req, res) => {
+  app.get("/api/users", async (req, res) => {
+    if (isSupabaseConfigured()) {
+      try {
+        console.log("[DYNAMIC GET USERS] Triggering Supabase dynamic rehydration sync for real-time dashboard data...");
+        await initializeSupabaseSync();
+      } catch (syncErr: any) {
+        console.error("⚠️ [DYNAMIC GET USERS] Supabase sync error:", syncErr?.message || syncErr);
+      }
+    }
     const combined = users.map(user => {
       return {
         ...user,
