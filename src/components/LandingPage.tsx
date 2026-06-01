@@ -692,38 +692,57 @@ export default function LandingPage({
             </a>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projectsList.map((proj) => (
-              <div key={proj.id} className="bg-white rounded-2xl p-6 border border-slate-200 flex flex-col justify-between hover:shadow-lg transition-all hover:border-brand-teal/40">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center bg-slate-50 rounded-lg p-2 border border-slate-100">
-                    <span className="text-[9px] font-mono bg-brand-teal-light text-brand-teal-dark px-2 py-0.5 rounded uppercase font-bold">
-                      {proj.workMode}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">₹{proj.budget.toLocaleString()} ({proj.hiringType})</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <h4 className="text-sm font-bold text-slate-900 font-sans tracking-tight">{proj.title}</h4>
-                    <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">{proj.description}</p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {proj.techStack?.map((s: string) => (
-                      <span key={s} className="bg-slate-50 text-brand-teal-dark text-[10px] font-mono px-2 py-0.5 rounded border border-slate-150">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-100 pt-4 mt-6 flex items-center justify-between text-[11px] text-slate-500">
-                  <span>Duration Forecast: {proj.duration}</span>
-                  <a href="#auth-section" className="text-brand-teal font-extrabold hover:underline">Apply to Escrow</a>
-                </div>
+          {projectsList.length === 0 ? (
+            <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-white px-6 space-y-4">
+              <div className="w-12 h-12 rounded-full bg-brand-teal/10 flex items-center justify-center mx-auto text-brand-teal">
+                <Briefcase className="w-6 h-6" />
               </div>
-            ))}
-          </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-slate-800">No Active Project Listings Yet</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Be the first developer or recruiter to post a project requiremennt! Authenticate below to post a compliant project and begin matching immediately.
+                </p>
+              </div>
+              <div className="pt-2">
+                <a href="#auth-section" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-bold hover:bg-brand-teal-dark px-4 py-2 rounded-xl text-xs transition-colors">
+                  Create a Project Listing Now
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {projectsList.map((proj) => (
+                <div key={proj.id} className="bg-white rounded-2xl p-6 border border-slate-200 flex flex-col justify-between hover:shadow-lg transition-all hover:border-brand-teal/40">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-slate-50 rounded-lg p-2 border border-slate-100">
+                      <span className="text-[9px] font-mono bg-brand-teal-light text-brand-teal-dark px-2 py-0.5 rounded uppercase font-bold">
+                        {proj.workMode}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">₹{proj.budget.toLocaleString()} ({proj.hiringType})</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <h4 className="text-sm font-bold text-slate-900 font-sans tracking-tight">{proj.title}</h4>
+                      <p className="text-xs text-slate-650 line-clamp-3 leading-relaxed">{proj.description}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {proj.techStack?.map((s: string) => (
+                        <span key={s} className="bg-slate-50 text-brand-teal-dark text-[10px] font-mono px-2 py-0.5 rounded border border-slate-150">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4 mt-6 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Duration Forecast: {proj.duration}</span>
+                    <a href="#auth-section" className="text-brand-teal font-extrabold hover:underline">Apply to Escrow</a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
         </div>
       </section>
@@ -740,49 +759,68 @@ export default function LandingPage({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {demoDevs.map((dev) => (
-              <div key={dev.userId} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-200 flex flex-col justify-between hover:border-brand-teal/40 hover:bg-white hover:shadow-lg transition-all text-slate-800">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <img 
-                      className="w-12 h-12 rounded-full object-cover border-2 border-brand-teal-light shadow-sm"
-                      src={dev.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Aryan"} 
-                      alt={dev.fullName}
-                      referrerPolicy="no-referrer"
-                    />
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1">
-                        {dev.fullName} 
-                        <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                      </h4>
-                      <p className="text-[10px] text-brand-teal font-semibold uppercase font-mono mt-0.5">{dev.headline}</p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-650 leading-relaxed font-sans">{dev.bio}</p>
-
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-mono uppercase tracking-wider text-slate-400 font-bold">Skills Inventory:</p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {dev.skills?.map((sk: string) => (
-                        <span key={sk} className="bg-white text-brand-teal-dark text-[9px] font-mono px-2 py-0.5 rounded border border-slate-200 font-semibold">
-                          {sk}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-200/80 pt-4 mt-6 flex items-center justify-between text-xs font-mono text-slate-500">
-                  <span>Minimum Rate: ₹{dev.rates?.hourly?.toLocaleString()}/hr</span>
-                  <a href="#auth-section" className="bg-white text-brand-teal hover:bg-brand-teal-light border border-slate-205 rounded-lg px-3 py-1 font-bold font-sans transition-colors text-[11px]">
-                    Discuss Project
-                  </a>
-                </div>
+          {demoDevs.length === 0 ? (
+            <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 px-6 space-y-4">
+              <div className="w-12 h-12 rounded-full bg-brand-teal/10 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-6 h-6 text-brand-teal" />
               </div>
-            ))}
-          </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-slate-800">No Active Professional Developer Profiles Yet</h4>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Be the first developer visible to thousands of recruiters! Create your profile today to showcase your skills, experience, and hourly guidelines.
+                </p>
+              </div>
+              <div className="pt-2">
+                <a href="#auth-section" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-bold hover:bg-brand-teal-dark px-4 py-2 rounded-xl text-xs transition-colors">
+                  Submit Vetted Profile Now
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {demoDevs.map((dev) => (
+                <div key={dev.userId} className="bg-slate-50/50 rounded-2xl p-6 border border-slate-200 flex flex-col justify-between hover:border-brand-teal/40 hover:bg-white hover:shadow-lg transition-all text-slate-800">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <img 
+                        className="w-12 h-12 rounded-full object-cover border-2 border-brand-teal-light shadow-sm"
+                        src={dev.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Aryan"} 
+                        alt={dev.fullName}
+                        referrerPolicy="no-referrer"
+                      />
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1">
+                          {dev.fullName} 
+                          <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                        </h4>
+                        <p className="text-[10px] text-brand-teal font-semibold uppercase font-mono mt-0.5">{dev.headline}</p>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-650 leading-relaxed font-sans">{dev.bio}</p>
+
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-mono uppercase tracking-wider text-slate-400 font-bold">Skills Inventory:</p>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {dev.skills?.map((sk: string) => (
+                          <span key={sk} className="bg-white text-brand-teal-dark text-[9px] font-mono px-2 py-0.5 rounded border border-slate-200 font-semibold">
+                            {sk}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200/80 pt-4 mt-6 flex items-center justify-between text-xs font-mono text-slate-500">
+                    <span>Minimum Rate: ₹{dev.rates?.hourly?.toLocaleString()}/hr</span>
+                    <a href="#auth-section" className="bg-white text-brand-teal hover:bg-brand-teal-light border border-slate-250 rounded-lg px-3 py-1 font-bold font-sans transition-colors text-[11px]">
+                      Discuss Project
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
         </div>
       </section>

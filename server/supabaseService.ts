@@ -37,6 +37,21 @@ export function getSupabaseClient(): SupabaseClient | null {
 export const SUPABASE_SETUP_SQL = `-- Supabase Schema Creation SQL Commands for the Indian Outstaffing Sandbox Marketplace
 -- Paste this script inside your Supabase Project SQL Editor and execute to build real tables.
 
+DROP TABLE IF EXISTS reviews CASCADE;
+DROP TABLE IF EXISTS disputes CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS messages CASCADE;
+DROP TABLE IF EXISTS chats CASCADE;
+DROP TABLE IF EXISTS ndas CASCADE;
+DROP TABLE IF EXISTS contact_access_requests CASCADE;
+DROP TABLE IF EXISTS invites CASCADE;
+DROP TABLE IF EXISTS applications CASCADE;
+DROP TABLE IF EXISTS project_stages CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+DROP TABLE IF EXISTS recruiter_profiles CASCADE;
+DROP TABLE IF EXISTS developer_profiles CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,

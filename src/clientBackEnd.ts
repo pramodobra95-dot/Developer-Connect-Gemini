@@ -23,285 +23,34 @@ const setStorageItem = (key: string, value: any) => {
 // DEFAULT MONGO-ESQUE IN-MEMORY COLLECTIONS
 // ----------------------------------------------------
 const defaultUsers = [
-  { id: "dev-aryan", email: "aryan.sharma@gmail.com", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2026-01-15T10:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true } },
-  { id: "dev-priya", email: "priya.iyer@gmail.com", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2026-02-10T11:30:00Z", notificationPreferences: { emailNewInvites: false, emailApplicationUpdates: true, emailChatMessages: true } },
-  { id: "dev-vikram", email: "vikram.singh@gmail.com", role: UserRole.DEVELOPER, isVerified: false, isSuspended: false, createdAt: "2026-05-20T08:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: false, emailChatMessages: true } },
-  { id: "rec-nexa", email: "hiring@nexasystems.com", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2026-03-01T09:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true } },
-  { id: "rec-aura", email: "talent@aurafinance.io", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2026-04-12T15:20:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true } },
   { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } }
 ];
 
-const defaultDeveloperProfiles = {
-  "dev-aryan": {
-    userId: "dev-aryan",
-    fullName: "Aryan Sharma",
-    headline: "Senior Full-Stack & DevOps Engineer",
-    bio: "Pragmatic developer with 8+ years of engineering experience scaled backend microservices to 10M+ DAU. Expert in React/Next.js and Go microservices orchestrations.",
-    skills: ["React", "TypeScript", "Node.js", "Go", "Kubernetes", "AWS", "PostgreSQL"],
-    techStack: ["Next.js", "Go", "Docker", "AWS", "GraphQL"],
-    experienceYears: 8,
-    availability: "Both",
-    rates: { hourly: 1200, weekly: 45000, monthly: 160000, projectMin: 25000 },
-    location: "Bengaluru, Karnataka",
-    socials: { github: "github.com/aryansharma", linkedin: "linkedin.com/in/aryansharma" },
-    isContactVisible: false,
-    phoneNumber: "+91 98765 43210",
-    email: "aryan.sharma@gmail.com",
-    status: "Available for contract",
-    avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAi4ngWd5CrR6vUA6u0s6nBgVorL1fJyiQeZGeTeldbqhrqo9SS08yPNdg1B_Bk5lK1nvZh3BQ20nxw-_y916Lyejy2LxBzH4dAd1fP20hkhXE2kyKcTIYgAXXEptu9T0DclDgPvOBdEXrLbGGVOs3uDJ-nbVrYWF8IeLnci5zg4yRQEInVehN5YYGJ8wLmMXcepUuqt73ZyhELf0LAB24-WUMsuFgxiRcVu33uwaHQP7VUW7dHQMA8sZitTh2A3D-tr5lV2LwAdRg",
-    analytics: { profileViews: 1420, invitesCount: 15, applicationsSent: 24, acceptedProjects: 6 }
-  },
-  "dev-priya": {
-    userId: "dev-priya",
-    fullName: "Priya Iyer",
-    headline: "Mobile Solutions Architect",
-    bio: "Focused on high-performance cross-platform applications and beautiful pixel-perfect Flutter workflows.",
-    skills: ["Flutter", "Dart", "Swift", "Kotlin", "Firebase", "TypeScript"],
-    techStack: ["React Native", "Android SDK", "iOS", "FastAPI"],
-    experienceYears: 6,
-    availability: "Full-time",
-    rates: { hourly: 1000, weekly: 38000, monthly: 140000, projectMin: 20000 },
-    location: "Pune, Maharashtra",
-    socials: { github: "github.com/priyaiyer", linkedin: "linkedin.com/in/priyaiyer" },
-    isContactVisible: true,
-    phoneNumber: "+91 91234 56789",
-    email: "priya.iyer@gmail.com",
-    status: "Open to offers",
-    avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuB1I5USH65OsJUR2pS5Kf_2YeKJP6eu-nelkx3GzTZCt3_hr8eAr7ae8tH2uPOgQyOjmXAon3loz00VEC7-eZQEJx4IVNzicoTZUGAHT8m65PnLMwEkXOHZ0fPQCUweKrA-BCGKCp7NZD0i3iQX42swV4pVmqzcaEXbPwfahUZISzCkRdMLWUoYgp9SDikX4VUBq0aYGLEJsiuLdMs4zI1j9LdIczPaub-gucmFs3iBlKIERIKj9bq4DKRbupWpZqoZK1Hz7POBfaQ",
-    analytics: { profileViews: 980, invitesCount: 9, applicationsSent: 12, acceptedProjects: 3 }
-  },
-  "dev-vikram": {
-    userId: "dev-vikram",
-    fullName: "Vikram Singh",
-    headline: "ML Engineer & Data Pytonian",
-    bio: "Developing deep learning modules and high throughput data pipeline integrations.",
-    skills: ["Python", "PyTorch", "TensorFlow", "scikit-learn", "Kafka", "PostgreSQL"],
-    techStack: ["Kubernetes", "Docker", "Spark"],
-    experienceYears: 4,
-    availability: "Part-time",
-    rates: { hourly: 1500, weekly: 55000, monthly: 210000, projectMin: 35000 },
-    location: "Hyderabad, Telangana",
-    socials: { github: "github.com/vikramsingh" },
-    isContactVisible: false,
-    phoneNumber: "+91 99911 88822",
-    email: "vikram.singh@gmail.com",
-    status: "Busy",
-    avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAWAHhBMvzbuR1SjuYs2Xlch2nkthYZraqu9ez7OafKCpsEd-PUjyJBiuxVSiXlgEsVNpbOEdwg5RssS29DhJjAnRzOG1Du-eD6ZUMRpmE06xPXvWSTGbLWBv1PbPCm1NvGl-PvAQf57ma6AuwnnXbaiA_QSjqa0ajuqtf5BWMMbu8vzz3nk1pltNC4vn1nGfZMDPeCbbdR9gixSW2aC1SxAvZ163wdTyJgKLIOwLcV0Z_WgMaoNP8xJ4mQurnRLB8CsXWyXAXcfLo",
-    analytics: { profileViews: 410, invitesCount: 4, applicationsSent: 9, acceptedProjects: 1 }
-  }
-};
+const defaultDeveloperProfiles = {};
 
-const defaultRecruiterProfiles = {
-  "rec-nexa": {
-    userId: "rec-nexa",
-    companyName: "Nexa Systems",
-    companyLogoUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuDPftZ36iKw3nObHvgba9nea_Zyj0Nd2M3c8O7F7xvt5Iu4MxzIXQnstWlp0RK8oQQ_FwArn7mL_sYT_iASEO041jfnEH_3PP2sa42YqQL55QIB686NISb31ZNTc_2uA1eh-o5IfIVOmi8OdS6Tem9sBVUN6TY5M_xDRK40PsR16g65-9Kf6eTta14_n6FgTjMlVUum_aH42kRZ-WsWd10bDpnSrUJJR847sHAZl0ZiXHyomzsOHFevVbSAMA1YbvN7jbzfwvlEShI",
-    website: "https://nexasystems.com",
-    industry: "Fintech Solutions",
-    companySize: "100-500",
-    aboutCompany: "Leading decentralized transaction routing architectures for high scale retail clients.",
-    fullName: "Sarah J. Lans",
-    phone: "+91 98888 77777",
-    avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAHrtVwh41RJX2Lpko9KyyxeN_5FjD7e8wL9O30OGNUlCSrUA8hZw4oTWT2TMM8w1luD7JPSM1h6tzjgVKt558q3ANC4hxM0L3z2M1cpU-QNe4IGDxMM66k-rvsA8Z1opa8mzfvhjxZyWMZ_fv55MMonleD0t9G14KbZUZtmX7aJGrLJco7tFdkcFS4W8Hh4g1HxeAmC6P6AGoE28f0XOQwkPSu8DU7xXD13FgPwnfSEq6zavtcKHaRtNB3fFP9hSuMI_JqnvMkr7k"
-  },
-  "rec-aura": {
-    userId: "rec-aura",
-    companyName: "Aura Finance",
-    website: "https://aurafinance.io",
-    industry: "SaaS & Investment",
-    companySize: "10-50",
-    aboutCompany: "Pioneering real-time global portfolio metrics & predictive asset optimization.",
-    fullName: "Rohan Kumar",
-    avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuCyPjw7LxfSUTvN9rzWWB4RD5TqgZiorg5rquwu-VQN2lWxOlAc4WwGaBZS48YEe9dxzr0oxKJjVLfMl9oUhKPo07w1dgULolyOHOBKo9tWEK5_L6kFLmvQd2Mtj3CWDloreSZU62NJlW3Vmo6hsyzU5qxGVzLVdatE-jT5bi5fGgQ6p2PN44ZP4pHnX_cBqJRdr9Bqr5_e2JQRm6UbCzmRTlNfW16EFXW43G3qyO77kNFkRc1-p8EMjWOAP_juvHhCrFUoCaa8vFQ"
-  }
-};
+const defaultRecruiterProfiles = {};
 
-const defaultProjects = [
-  {
-    id: "proj-ecommerce",
-    recruiterId: "rec-nexa",
-    title: "Next-Gen E-commerce Backend Architecture",
-    description: "Seeking a senior backend architect to design and implement a next-generation e-commerce backbone capable of handling high-concurrency peak events (10k+ orders/min). The system must be event-driven using Redis, PostgreSQL and deploy to Kubernetes.",
-    techStack: ["Node.js", "TypeScript", "Redis", "Docker", "AWS", "PostgreSQL"],
-    budget: 1200000,
-    hiringType: "Fixed Price",
-    workMode: "Remote",
-    duration: "3 months",
-    status: "OPEN",
-    createdAt: "2026-05-26T18:00:00Z"
-  },
-  {
-    id: "proj-llm",
-    recruiterId: "rec-aura",
-    title: "LLM Integration for Real-time Financial Analysis",
-    description: "Build an optimized data ingestion pipeline parsing market sentiment trends via Llama-3 or Gemini. Integrate results cleanly into an existing React dashboard. Priority to local developers in Mumbai/Bengaluru.",
-    techStack: ["React", "Python", "LangChain", "FastAPI"],
-    budget: 85000,
-    hiringType: "Hourly Rate",
-    workMode: "Remote",
-    duration: "1 month",
-    status: "OPEN",
-    createdAt: "2026-05-27T12:00:00Z"
-  },
-  {
-    id: "proj-bento",
-    recruiterId: "rec-aura",
-    title: "Bento-Style Dashboard Design & Frontend",
-    description: "Create a modern, high-density bento grid portfolio dashboard with framer-motion kinetics using React and Tailwind CSS v4. Must have strict visual hierarchy and beautiful spacing.",
-    techStack: ["React", "Tailwind CSS", "Framer Motion"],
-    budget: 45000,
-    hiringType: "Fixed Price",
-    workMode: "On-site",
-    duration: "2 weeks",
-    status: "OPEN",
-    createdAt: "2026-05-28T09:00:00Z"
-  }
-];
+const defaultProjects: any[] = [];
 
-const defaultApplications = [
-  {
-    id: "app-1",
-    projectId: "proj-ecommerce",
-    developerId: "dev-aryan",
-    coverLetter: "I have extensive experience refactoring high-throughput Node.js microservices and building Redis locks for checkout consistency.",
-    proposedRate: 65000,
-    availability: "Full-time",
-    timelineEstimate: "3 months",
-    status: "SHORTLISTED",
-    createdAt: "2026-05-27T10:00:00Z"
-  }
-];
+const defaultApplications: any[] = [];
 
-const defaultInvites = [
-  {
-    id: "inv-1",
-    projectId: "proj-bento",
-    recruiterId: "rec-aura",
-    developerId: "dev-aryan",
-    message: "We loved your profile's focus on elegant design pairings and typography! Let's build our dashboard together.",
-    status: "PENDING",
-    createdAt: "2026-05-28T10:00:00Z"
-  }
-];
+const defaultInvites: any[] = [];
 
-const defaultContactRequests = [
-  {
-    id: "con-1",
-    recruiterId: "rec-nexa",
-    developerId: "dev-aryan",
-    status: "APPROVED",
-    createdAt: "2026-05-28T11:00:00Z"
-  }
-];
+const defaultContactRequests: any[] = [];
 
-const defaultChats = [
-  {
-    id: "chat-aryan-nexa",
-    projectId: "proj-ecommerce",
-    developerId: "dev-aryan",
-    recruiterId: "rec-nexa",
-    lastMessageText: "Looking forward to starting our secure contract session Aryan!",
-    lastMessageAt: "2026-05-29T14:30:00Z",
-    isClosed: false,
-    closedReason: null
-  }
-];
+const defaultChats: any[] = [];
 
-const defaultMessages = [
-  {
-    id: "msg-1",
-    chatId: "chat-aryan-nexa",
-    senderId: "rec-nexa",
-    receiverId: "dev-aryan",
-    text: "Hello Aryan! I saw your stunning performance metrics on DeveloperConnect and wanted to kickstart our backend refactor milestone discussion.",
-    createdAt: "2026-05-29T14:15:00Z"
-  },
-  {
-    id: "msg-2",
-    chatId: "chat-aryan-nexa",
-    senderId: "dev-aryan",
-    receiverId: "rec-nexa",
-    text: "Thank you Sarah! I've already drafted the technical design spec for the transactional redis locking system. I can start deployment next Monday.",
-    createdAt: "2026-05-29T14:20:00Z"
-  },
-  {
-    id: "msg-3",
-    chatId: "chat-aryan-nexa",
-    senderId: "rec-nexa",
-    receiverId: "dev-aryan",
-    text: "Looking forward to starting our secure contract session Aryan!",
-    createdAt: "2026-05-29T14:30:00Z"
-  }
-];
+const defaultMessages: any[] = [];
 
-const defaultDisputes = [
-  {
-    id: "disp-1",
-    projectId: "proj-ecommerce",
-    milestoneTitle: "Milestone 1: Redis Integration",
-    raisedBy: "rec-nexa",
-    opponentId: "dev-aryan",
-    reason: "Delayed Milestone",
-    details: "The locking framework requires multi-region coverage which wasn't fully checked, resulting in a single point of failure in APAC deployments. Seeking resolution.",
-    escrowAmount: 45000,
-    proposedResolution: "Split escrow 70/30 or extend delivery timeline by 4 business days.",
-    status: "PENDING",
-    mediatorDecision: null,
-    createdAt: "2026-05-30T10:00:00Z"
-  }
-];
+const defaultDisputes: any[] = [];
 
-const defaultProjectStages = [
-  {
-    id: "stage-1",
-    projectId: "proj-ecommerce",
-    title: "Milestone 1: In-memory Caching Setup",
-    description: "Design and implement full high throughput caching mechanisms.",
-    cost: 45000,
-    dueDate: "2026-06-15",
-    createdBy: "RECRUITER",
-    isApproved: true,
-    isCompleted: false,
-    createdAt: "2026-05-29T11:00:00Z"
-  }
-];
+const defaultProjectStages: any[] = [];
 
-const defaultNdas = [
-  {
-    id: "nda-1",
-    projectId: "proj-ecommerce",
-    developerId: "dev-aryan",
-    terms: "All e-commerce scaling formulas, cluster configs, and transaction locking design strategies are strictly trade secret covenants of Nexa Systems.",
-    developerSignature: "Aryan Sharma",
-    developerSignedAt: "2026-05-28T09:30:00Z",
-    recruiterSignature: "Sarah Lans",
-    recruiterSignedAt: "2026-05-28T10:00:00Z",
-    createdAt: "2026-05-28T09:00:00Z"
-  }
-];
+const defaultNdas: any[] = [];
 
-const defaultReviews = [
-  {
-    id: "rev-1",
-    projectId: "proj-ecommerce",
-    reviewerId: "rec-nexa",
-    revieweeId: "dev-aryan",
-    rating: 5,
-    comment: "Excellent technical design and swift Redis logic. Outstaffing under BANTConfirm guidelines of absolute legal compliance is pristine.",
-    createdAt: "2026-05-30T18:00:00Z"
-  }
-];
+const defaultReviews: any[] = [];
 
-const defaultNotifications = [
-  {
-    id: "not-1",
-    userId: "dev-aryan",
-    title: "New Recruiter Lead",
-    message: "Sarah Lans from Nexa Systems has accessed your profile analytics and generated an NDA blueprint.",
-    isRead: false,
-    createdAt: "2026-05-30T09:00:00Z"
-  }
-];
+const defaultNotifications: any[] = [];
 
 // Setup local schema
 export const initializeStorageDatabase = () => {
