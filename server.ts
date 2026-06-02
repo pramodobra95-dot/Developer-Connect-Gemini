@@ -83,16 +83,155 @@ if (geminiApiKey) {
 let currentUserId = ""; // Default session user empty (no active logged in session)
 
 let users = [
-  { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } }
+  { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } },
+  { id: "user-dev1", email: "priya.sharma@outstaff.io", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2025-01-10T08:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
+  { id: "user-dev2", email: "amit.patel@outstaff.io", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2025-01-12T09:30:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
+  { id: "user-dev3", email: "rohan.das@techspace.in", role: UserRole.DEVELOPER, isVerified: false, isSuspended: false, createdAt: "2025-01-15T14:20:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
+  { id: "user-rec1", email: "talent@capitalone.in", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2025-01-05T10:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
+  { id: "user-rec2", email: "hiring@innovate.co", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2025-01-08T11:15:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } }
 ];
 
-let developerProfiles: Record<string, DeveloperProfile> = {};
+let developerProfiles: Record<string, DeveloperProfile> = {
+  "user-dev1": {
+    userId: "user-dev1",
+    fullName: "Priya Sharma",
+    headline: "Lead Full-Stack Systems Engineer",
+    bio: "Passionate full-stack systems engineer with 6+ years of expertise constructing responsive React architectures and resilient Node.js backends. Specializes in real-time syncing pipelines and AWS optimization.",
+    skills: ["React", "TypeScript", "Node.js", "Express", "PostgreSQL", "Tailwind CSS"],
+    techStack: ["React", "TypeScript", "Node.js", "Tailwind CSS"],
+    experienceYears: 6,
+    availability: "Both",
+    rates: { hourly: 850, weekly: 32000, monthly: 120000, projectMin: 15000 },
+    location: "Bengaluru, India",
+    socials: { github: "github.com/priya-sharma", linkedin: "linkedin.com/in/priya-sharma" },
+    isContactVisible: true,
+    phoneNumber: "+91 98765 43210",
+    email: "priya.sharma@outstaff.io",
+    status: "Available for contract",
+    avatarUrl: "https://api.dicebear.com/7.x/adventurer/svg?seed=Priya",
+    analytics: { profileViews: 142, invitesCount: 18, applicationsSent: 12, acceptedProjects: 4 }
+  },
+  "user-dev2": {
+    userId: "user-dev2",
+    fullName: "Amit Patel",
+    headline: "Senior DevOps & Cloud Infrastructure Lead",
+    bio: "Ex-Infosys cloud infrastructure architect. Specialist in Docker containers orchestration, Kubernetes deployments, secure SSH configurations, and designing robust secure networks on AWS & GCP.",
+    skills: ["Docker", "Kubernetes", "AWS", "Bash", "Terraform", "CI/CD", "Security Audit"],
+    techStack: ["Docker", "AWS", "CI/CD"],
+    experienceYears: 8,
+    availability: "Both",
+    rates: { hourly: 950, weekly: 36000, monthly: 140000, projectMin: 20000 },
+    location: "Mumbai, India",
+    socials: { github: "github.com/amit-patel", linkedin: "linkedin.com/in/amit-patel" },
+    isContactVisible: false,
+    phoneNumber: "+91 87654 32109",
+    email: "amit.patel@outstaff.io",
+    status: "Available, looking for premium roles",
+    avatarUrl: "https://api.dicebear.com/7.x/adventurer/svg?seed=Amit",
+    analytics: { profileViews: 98, invitesCount: 22, applicationsSent: 8, acceptedProjects: 2 }
+  },
+  "user-dev3": {
+    userId: "user-dev3",
+    fullName: "Rohan Das",
+    headline: "Frontend React Developer",
+    bio: "Energetic frontend developer building pixel-perfect responsive user interfaces. Highly proficient with modern Tailwind styles, motion transitions, and React hooks state optimization.",
+    skills: ["React", "TypeScript", "Tailwind CSS", "motion", "JavaScript", "HTML5"],
+    techStack: ["React", "Tailwind CSS"],
+    experienceYears: 3,
+    availability: "Both",
+    rates: { hourly: 550, weekly: 20000, monthly: 75000, projectMin: 5000 },
+    location: "Kolkata, India",
+    socials: { github: "github.com/rohan-das" },
+    isContactVisible: false,
+    phoneNumber: "+91 76543 21098",
+    email: "rohan.das@techspace.in",
+    status: "Actively seeking opportunities",
+    avatarUrl: "https://api.dicebear.com/7.x/adventurer/svg?seed=Rohan",
+    analytics: { profileViews: 45, invitesCount: 4, applicationsSent: 15, acceptedProjects: 1 }
+  }
+};
 
-let recruiterProfiles: Record<string, RecruiterProfile> = {};
+let recruiterProfiles: Record<string, RecruiterProfile> = {
+  "user-rec1": {
+    userId: "user-rec1",
+    companyName: "Capital One India IT",
+    companyLogoUrl: "",
+    website: "https://capitalone.in",
+    industry: "Financial Technology",
+    companySize: "501-1000",
+    aboutCompany: "Leading next-generation consumer lending and digital credit platform operating major technical hubs across Bangalore and Hyderabad.",
+    fullName: "Divya Nair",
+    phone: "+91 76543 21098",
+    avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Capital"
+  },
+  "user-rec2": {
+    userId: "user-rec2",
+    companyName: "Innovate.co",
+    companyLogoUrl: "",
+    website: "https://innovate.co",
+    industry: "Information Technology",
+    companySize: "11-50",
+    aboutCompany: "Venture-backed high performance web incubator assisting agile early-stage developers build production-ready software systems under Section 72 IT compliance.",
+    fullName: "Vikram Sen",
+    phone: "+91 65432 10987",
+    avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Innovate"
+  }
+};
 
-let projects: Project[] = [];
+let projects: Project[] = [
+  {
+    id: "proj-1",
+    recruiterId: "user-rec1",
+    title: "Secure FinTech Unified Ledger Pipeline System",
+    description: "Construct a highly secure transaction processing pipeline complying with standard audit regulations. The engineering system requires robust database transaction isolation, Redis caching, and Node/Express backend layers.",
+    techStack: ["Node.js", "Express", "PostgreSQL", "Redis"],
+    budget: 450000,
+    hiringType: HiringType.CONTRACT,
+    workMode: WorkMode.REMOTE,
+    duration: "3 months",
+    status: ProjectStatus.OPEN,
+    createdAt: "2025-01-15T10:00:00Z",
+    aiSuggestedMetrics: {
+      suggestedTech: ["PostgreSQL", "Redis"],
+      recommendedRoles: ["Backend Engineer", "Security Lead"],
+      confidence: 92,
+      estimatedDays: 90
+    }
+  },
+  {
+    id: "proj-2",
+    recruiterId: "user-rec2",
+    title: "Tailwind React SaaS Admin Framework Refactoring",
+    description: "Refactor a legacy UI dashboards application into an elegant React 18 frontend with pixel-perfect responsive styling, structured Tailwind classes, and beautiful micro-animations using motion.",
+    techStack: ["React", "TypeScript", "Tailwind CSS", "motion"],
+    budget: 120000,
+    hiringType: HiringType.FIXED_PRICE,
+    workMode: WorkMode.HYBRID,
+    duration: "1 month",
+    status: ProjectStatus.OPEN,
+    createdAt: "2025-01-18T11:00:00Z",
+    aiSuggestedMetrics: {
+      suggestedTech: ["React", "Tailwind CSS"],
+      recommendedRoles: ["Frontend Specialist"],
+      confidence: 88,
+      estimatedDays: 30
+    }
+  }
+];
 
-let applications: Application[] = [];
+let applications: Application[] = [
+  {
+    id: "app-seed-1",
+    projectId: "proj-1",
+    developerId: "user-dev1",
+    coverLetter: "I have multiple years of back-end banking engineering knowledge, implementing custom secure REST and RPC end-points. I would love to tackle this transaction isolated logic immediately.",
+    proposedRate: 850,
+    availability: "Both",
+    timelineEstimate: "3 months",
+    status: ApplicationStatus.PENDING,
+    createdAt: "2025-01-16T10:30:00Z"
+  }
+];
 
 let invites: Invite[] = [];
 
@@ -133,20 +272,47 @@ function addAdminNotification(title: string, desc: string) {
 // ----------------------------------------------------
 // Supabase Replication and Synchronization Logic
 // ----------------------------------------------------
+async function seedPremiumData() {
+  if (!isSupabaseConfigured()) return;
+  console.log("🌱 Database is empty. Seeding premium default user base and developer portfolios to Supabase...");
+  try {
+    for (const u of users) {
+      await dbSaveUser(u);
+    }
+    for (const key in developerProfiles) {
+      await dbSaveDeveloperProfile(key, developerProfiles[key]);
+    }
+    for (const key in recruiterProfiles) {
+      await dbSaveRecruiterProfile(key, recruiterProfiles[key]);
+    }
+    for (const proj of projects) {
+      await dbSaveProject(proj);
+    }
+    for (const app of applications) {
+      await dbSaveApplication(app);
+    }
+    console.log("✨ Seed successfully written to Supabase.");
+  } catch (err: any) {
+    console.error("🔴 Failed to seed Supabase with premium defaults:", err?.message || err);
+  }
+}
+
 async function initializeSupabaseSync() {
   if (isSupabaseConfigured()) {
     console.log("🔄 Hydrating local in-memory DB tables with Supabase database content...");
     try {
       // 1. Users
       const dbUsers = await dbGetUsers([]);
-      if (dbUsers) {
+      if (dbUsers && dbUsers.length > 0) {
         users.length = 0;
         users.push(...dbUsers);
+      } else if (dbUsers && dbUsers.length === 0) {
+        await seedPremiumData();
       }
 
       // 2. Developer Profiles
       const dbDevProfs = await dbGetDeveloperProfiles({});
-      if (dbDevProfs) {
+      if (dbDevProfs && Object.keys(dbDevProfs).length > 0) {
         for (const key in developerProfiles) {
           delete developerProfiles[key];
         }
@@ -155,7 +321,7 @@ async function initializeSupabaseSync() {
 
       // 3. Recruiter Profiles
       const dbRecProfs = await dbGetRecruiterProfiles({});
-      if (dbRecProfs) {
+      if (dbRecProfs && Object.keys(dbRecProfs).length > 0) {
         for (const key in recruiterProfiles) {
           delete recruiterProfiles[key];
         }
@@ -164,35 +330,35 @@ async function initializeSupabaseSync() {
 
       // 4. Projects
       const dbProjs = await dbGetProjects([]);
-      if (dbProjs) {
+      if (dbProjs && dbProjs.length > 0) {
         projects.length = 0;
         projects.push(...dbProjs);
       }
 
       // 5. Applications
       const dbApps = await dbGetApplications([]);
-      if (dbApps) {
+      if (dbApps && dbApps.length > 0) {
         applications.length = 0;
         applications.push(...dbApps);
       }
 
       // 6. Project Stages
       const dbStages = await dbGetProjectStages([]);
-      if (dbStages) {
+      if (dbStages && dbStages.length > 0) {
         projectStages.length = 0;
         projectStages.push(...dbStages);
       }
 
       // 7. NDAs
       const dbNdas = await dbGetNDAs([]);
-      if (dbNdas) {
+      if (dbNdas && dbNdas.length > 0) {
         ndas.length = 0;
         ndas.push(...dbNdas);
       }
 
       // 8. Chats
       const dbChatsList = await dbGetChats([]);
-      if (dbChatsList) {
+      if (dbChatsList && dbChatsList.length > 0) {
         chats.length = 0;
         chats.push(...dbChatsList);
       }
@@ -205,35 +371,35 @@ async function initializeSupabaseSync() {
           freshMessages.push(...dbMsgs);
         }
       }
-      if (freshMessages.length > 0 || chats.length > 0) {
+      if (freshMessages.length > 0) {
         messages.length = 0;
         messages.push(...freshMessages);
       }
 
       // 9. Notifications
       const dbNotifs = await dbGetNotifications([]);
-      if (dbNotifs) {
+      if (dbNotifs && dbNotifs.length > 0) {
         notifications.length = 0;
         notifications.push(...dbNotifs);
       }
 
       // 10. Disputes
       const dbDisps = await dbGetDisputes([]);
-      if (dbDisps) {
+      if (dbDisps && dbDisps.length > 0) {
         disputes.length = 0;
         disputes.push(...dbDisps);
       }
 
       // 11. Invites
       const dbInvs = await dbGetInvites([]);
-      if (dbInvs) {
+      if (dbInvs && dbInvs.length > 0) {
         invites.length = 0;
         invites.push(...dbInvs);
       }
 
       // 12. Contact requests
       const dbCons = await dbGetContactRequests([]);
-      if (dbCons) {
+      if (dbCons && dbCons.length > 0) {
         contactAccessRequests.length = 0;
         contactAccessRequests.push(...dbCons);
       }

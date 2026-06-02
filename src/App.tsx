@@ -163,16 +163,12 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  // Poll for real-time chat updates when on the chats tab
-  useEffect(() => {
-    if (activeTab !== "chats") return;
+    // Continuous dynamic background polling every 5 seconds for immediate multi-device profile and project updates
     const interval = setInterval(() => {
       fetchData();
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, []);
 
   // Character switch handler
   const handleSwitchSession = async (userId: string) => {
@@ -644,6 +640,8 @@ export default function App() {
                   currentUser={currentUser}
                   usersList={allUsers}
                   disputes={disputes}
+                  projects={projects}
+                  applications={applications}
                   onUpdateUser={handleUpdateUserStatus}
                   onResolveDispute={handleResolveDispute}
                   onUpdatePreferences={handleUpdatePreferences}

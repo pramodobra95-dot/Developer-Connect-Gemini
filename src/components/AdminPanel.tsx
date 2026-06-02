@@ -21,6 +21,8 @@ interface AdminPanelProps {
   currentUser: User;
   usersList: any[];
   disputes: Dispute[];
+  projects?: any[];
+  applications?: any[];
   onUpdateUser: (userId: string, updates: any) => void;
   onResolveDispute: (disputeId: string, rationale: string, ratio?: { recruiter: number; developer: number }, status?: DisputeStatus) => void;
   onUpdatePreferences?: (prefs: any) => void;
@@ -30,10 +32,13 @@ export default function AdminPanel({
   currentUser,
   usersList,
   disputes,
+  projects = [],
+  applications = [],
   onUpdateUser,
   onResolveDispute,
   onUpdatePreferences
 }: AdminPanelProps) {
+  const [adminActiveTab, setAdminActiveTab] = useState<"users" | "developers" | "recruiters" | "projects" | "applications">("users");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRoleFilter, setSelectedRoleFilter] = useState("all");
   const [selectedDispute, setSelectedDispute] = useState<Dispute | null>(null);
@@ -254,180 +259,473 @@ export default function AdminPanel({
           </div>
         </section>
       )}
+            {/* DYNAMIC CONSOLE DATA VIEWER WITH MULTI-TABS */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        {/* Tab Headers */}
+        <div className="bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between p-4 gap-4">
+          <div className="flex gap-1 flex-wrap">
+            {(["users", "developers", "recruiters", "projects", "applications"] as const).map((tab) => {
+              const count = tab === "users" ? usersList.length
+                : tab === "developers" ? usersList.filter(u => u.role === "DEVELOPER" && u.devProfile).length
+                : tab === "recruiters" ? usersList.filter(u => u.role === "RECRUITER" && u.recProfile).length
+                : tab === "projects" ? projects.length
+                : applications.length;
 
-      {/* ACTIVE USERS MANAGER */}
-      <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 font-sans">Active User Base Management Control</h3>
-            <p className="text-xs text-slate-500">Suspend accounts, verify developer portfolios, or change roles.</p>
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    setAdminActiveTab(tab);
+                    setSearchQuery("");
+                  }}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all capitalize cursor-pointer ${
+                    adminActiveTab === tab
+                      ? "bg-brand-teal text-white shadow-sm font-bold"
+                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                  }`}
+                >
+                  {tab} ({count})
+                </button>
+              );
+            })}
           </div>
-          <div className="flex gap-2">
-            <input 
+
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+            <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all font-sans" 
-              placeholder="Search by email..."
+              className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-brand-teal focus:ring-1 focus:ring-brand-teal/20 transition-all font-sans"
+              placeholder={`Search ${adminActiveTab}...`}
             />
           </div>
         </div>
 
-        <div className="overflow-x-auto text-slate-800">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
-                <th className="p-4 font-bold">Persona</th>
-                <th className="p-4 font-bold">Contact</th>
-                <th className="p-4 font-bold">Verification</th>
-                <th className="p-4 font-bold">Email preferences (Admin Override)</th>
-                <th className="p-4 font-bold">Sanction Status</th>
-                <th className="p-4 text-right font-bold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-body-sm text-xs">
-              {usersList
-                .filter(u => !searchQuery || u.email.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((usr) => {
-                  const prefs = usr.notificationPreferences || {
-                    emailNewInvites: true,
-                    emailApplicationUpdates: true,
-                    emailChatMessages: true
-                  };
-                  return (
-                    <tr key={usr.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="p-4">
-                        <span className="font-bold text-slate-900 block mb-1">
-                          {usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email.split('@')[0]}
-                        </span>
-                        
-                        {/* Interactive Role Management */}
-                        {usr.email.toLowerCase().trim() === "info.bouuz@gmail.com" ? (
-                          <p className="text-[10px] font-bold text-rose-600 tracking-wide uppercase font-mono bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md inline-block">
-                            ADMIN (SYSTEM OWNER)
-                          </p>
-                        ) : (
-                          <div className="inline-block">
-                            <select
-                              value={usr.role}
-                              onChange={(e) => {
-                                const newRole = e.target.value;
-                                if (window.confirm(`Are you sure you want to change the role of ${usr.email} to ${newRole}?`)) {
-                                  onUpdateUser(usr.id, { role: newRole });
-                                }
-                              }}
-                              className="bg-slate-50 hover:bg-slate-100 border border-slate-250 text-[10px] font-bold text-slate-700 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-brand-teal transition-all cursor-pointer font-sans"
-                            >
-                              <option value="DEVELOPER">DEVELOPER ROLE</option>
-                              <option value="RECRUITER">RECRUITER ROLE</option>
-                              <option value="ADMIN">ADMIN ROLE</option>
-                            </select>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-4 font-mono text-xs text-slate-650">{usr.email}</td>
-                      <td className="p-4">
-                        {usr.isVerified ? (
-                          <span className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 w-max">
-                            <CheckCircle className="w-3.5 h-3.5" /> Verified
+        {/* Tab 1: ALL USER ACCOUNTS */}
+        {adminActiveTab === "users" && (
+          <div className="overflow-x-auto text-slate-800">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
+                  <th className="p-4 font-bold">Persona</th>
+                  <th className="p-4 font-bold">Contact</th>
+                  <th className="p-4 font-bold">Verification</th>
+                  <th className="p-4 font-bold">Email preferences (Admin Override)</th>
+                  <th className="p-4 font-bold">Sanction Status</th>
+                  <th className="p-4 text-right font-bold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-body-sm text-xs">
+                {usersList
+                  .filter(u => !searchQuery || u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((usr) => {
+                    const prefs = usr.notificationPreferences || {
+                      emailNewInvites: true,
+                      emailApplicationUpdates: true,
+                      emailChatMessages: true
+                    };
+                    return (
+                      <tr key={usr.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="p-4">
+                          <span className="font-bold text-slate-900 block mb-1">
+                            {usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email.split('@')[0]}
                           </span>
-                        ) : (
-                          <button
-                            onClick={() => onUpdateUser(usr.id, { isVerified: true })}
-                            className="text-brand-teal hover:underline font-bold text-xs cursor-pointer"
-                          >
-                            Approve Verification
-                          </button>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col gap-1.5 font-mono text-[10px] text-slate-600">
-                          {usr.role === "DEVELOPER" && (
+                          
+                          {/* Interactive Role Management */}
+                          {usr.email.toLowerCase().trim() === "info.bouuz@gmail.com" ? (
+                            <p className="text-[10px] font-bold text-rose-600 tracking-wide uppercase font-mono bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md inline-block">
+                              ADMIN (SYSTEM OWNER)
+                            </p>
+                          ) : (
+                            <div className="inline-block">
+                              <select
+                                value={usr.role}
+                                onChange={(e) => {
+                                  const newRole = e.target.value;
+                                  if (window.confirm(`Are you sure you want to change the role of ${usr.email} to ${newRole}?`)) {
+                                    onUpdateUser(usr.id, { role: newRole });
+                                  }
+                                }}
+                                className="bg-slate-50 hover:bg-slate-100 border border-slate-250 text-[10px] font-bold text-slate-705 rounded px-1.5 py-0.5 outline-none font-mono"
+                              >
+                                <option value="DEVELOPER">DEVELOPER ROLE</option>
+                                <option value="RECRUITER">RECRUITER ROLE</option>
+                                <option value="ADMIN">ADMIN ROLE</option>
+                              </select>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4 font-mono text-xs text-slate-655">{usr.email}</td>
+                        <td className="p-4">
+                          {usr.isVerified ? (
+                            <span className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 w-max">
+                              <CheckCircle className="w-3.5 h-3.5" /> Verified
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => onUpdateUser(usr.id, { isVerified: true })}
+                              className="text-brand-teal hover:underline font-bold text-xs cursor-pointer"
+                            >
+                              Approve Verification
+                            </button>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-col gap-1.5 font-mono text-[10px] text-slate-600">
+                            {usr.role === "DEVELOPER" && (
+                              <label className="flex items-center gap-1.5 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  checked={prefs.emailNewInvites !== false}
+                                  onChange={(e) => {
+                                    onUpdateUser(usr.id, {
+                                      notificationPreferences: {
+                                        ...prefs,
+                                        emailNewInvites: e.target.checked
+                                      }
+                                    });
+                                  }}
+                                  className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
+                                />
+                                <span>New Invites Email: {prefs.emailNewInvites !== false ? "ON" : "OFF"}</span>
+                              </label>
+                            )}
                             <label className="flex items-center gap-1.5 cursor-pointer">
                               <input 
                                 type="checkbox"
-                                checked={prefs.emailNewInvites !== false}
+                                checked={prefs.emailApplicationUpdates !== false}
                                 onChange={(e) => {
                                   onUpdateUser(usr.id, {
                                     notificationPreferences: {
                                       ...prefs,
-                                      emailNewInvites: e.target.checked
+                                      emailApplicationUpdates: e.target.checked
                                     }
                                   });
                                 }}
                                 className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
                               />
-                              <span>New Invites Email: {prefs.emailNewInvites !== false ? "ON" : "OFF"}</span>
+                              <span>Updates Email: {prefs.emailApplicationUpdates !== false ? "ON" : "OFF"}</span>
                             </label>
-                          )}
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input 
-                              type="checkbox"
-                              checked={prefs.emailApplicationUpdates !== false}
-                              onChange={(e) => {
-                                onUpdateUser(usr.id, {
-                                  notificationPreferences: {
-                                    ...prefs,
-                                    emailApplicationUpdates: e.target.checked
-                                  }
-                                });
-                              }}
-                              className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
-                            />
-                            <span>Updates Email: {prefs.emailApplicationUpdates !== false ? "ON" : "OFF"}</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <input 
-                              type="checkbox"
-                              checked={prefs.emailChatMessages !== false}
-                              onChange={(e) => {
-                                onUpdateUser(usr.id, {
-                                  notificationPreferences: {
-                                    ...prefs,
-                                    emailChatMessages: e.target.checked
-                                  }
-                                });
-                              }}
-                              className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
-                            />
-                            <span>Direct Chat Email: {prefs.emailChatMessages !== false ? "ON" : "OFF"}</span>
-                          </label>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        {usr.isSuspended ? (
-                          <span className="text-rose-600 font-bold flex items-center gap-1 bg-rose-50 border border-rose-100 rounded-full px-2.5 py-0.5 w-max">
-                            <AlertCircle className="w-3.5 h-3.5" /> Suspended
-                          </span>
-                        ) : (
-                          <span className="text-slate-450 italic font-medium">Good Standing</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="flex gap-2 justify-end">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input 
+                                type="checkbox"
+                                checked={prefs.emailChatMessages !== false}
+                                onChange={(e) => {
+                                  onUpdateUser(usr.id, {
+                                    notificationPreferences: {
+                                      ...prefs,
+                                      emailChatMessages: e.target.checked
+                                    }
+                                  });
+                                }}
+                                className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
+                              />
+                              <span>Direct Chat Email: {prefs.emailChatMessages !== false ? "ON" : "OFF"}</span>
+                            </label>
+                          </div>
+                        </td>
+                        <td className="p-4">
                           {usr.isSuspended ? (
-                            <button
-                              onClick={() => onUpdateUser(usr.id, { isSuspended: false })}
-                              className="bg-white hover:bg-slate-50 text-slate-700 text-[11px] px-2.5 py-1 border border-slate-205 rounded-lg font-bold transition-all cursor-pointer shadow-sm"
-                            >
-                              Unsuspend
-                            </button>
+                            <span className="text-rose-600 font-bold flex items-center gap-1 bg-rose-50 border border-rose-100 rounded-full px-2.5 py-0.5 w-max">
+                              <AlertCircle className="w-3.5 h-3.5" /> Suspended
+                            </span>
                           ) : (
-                            <button
-                              onClick={() => onUpdateUser(usr.id, { isSuspended: true })}
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] px-2.5 py-1 rounded border border-rose-200 transition-all cursor-pointer"
-                            >
-                              Suspend
-                            </button>
+                            <span className="text-slate-450 italic font-medium">Good Standing</span>
                           )}
-                        </div>
-                      </td>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex gap-2 justify-end">
+                            {usr.isSuspended ? (
+                              <button
+                                onClick={() => onUpdateUser(usr.id, { isSuspended: false })}
+                                className="bg-white hover:bg-slate-50 text-slate-700 text-[11px] px-2.5 py-1 border border-slate-205 rounded-lg font-bold transition-all cursor-pointer shadow-sm"
+                              >
+                                Unsuspend
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onUpdateUser(usr.id, { isSuspended: true })}
+                                className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] px-2.5 py-1 rounded border border-rose-200 transition-all cursor-pointer"
+                              >
+                                Suspend
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Tab 2: DEVELOPER PROFILES */}
+        {adminActiveTab === "developers" && (() => {
+          const devList = usersList
+            .filter(u => u.role === "DEVELOPER" && u.devProfile)
+            .map(u => u.devProfile)
+            .filter(d => !searchQuery || d.fullName.toLowerCase().includes(searchQuery.toLowerCase()) || d.headline.toLowerCase().includes(searchQuery.toLowerCase()));
+
+          return (
+            <div className="overflow-x-auto text-slate-800">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50/50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
+                    <th className="p-4 font-bold">Developer Name / Info</th>
+                    <th className="p-4 font-bold">Headline & Location</th>
+                    <th className="p-4 font-bold">Rates Guideline</th>
+                    <th className="p-4 font-bold">Skills Inventory</th>
+                    <th className="p-4 font-bold">Experience</th>
+                    <th className="p-4 text-right font-bold">Verify Profile</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {devList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 font-mono">No matching developer profiles found.</td>
                     </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                  ) : (
+                    devList.map((dev) => {
+                      const userAccount = usersList.find(u => u.id === dev.userId) || {};
+                      return (
+                        <tr key={dev.userId} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <img src={dev.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Priya"} alt={dev.fullName} className="w-9 h-9 rounded-full bg-slate-100 shrink-0" referrerPolicy="no-referrer" />
+                              <div>
+                                <span className="font-bold text-slate-900 block">{dev.fullName}</span>
+                                <span className="text-[10px] text-slate-400 font-mono shrink-0">{dev.email}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <p className="font-semibold text-slate-755">{dev.headline}</p>
+                            <p className="text-[10px] text-slate-405 mt-0.5 font-sans">📌 {dev.location || "India"}</p>
+                          </td>
+                          <td className="p-4 font-mono text-slate-655">
+                            <p>Hourly: ₹{dev.rates?.hourly}/hr</p>
+                            <p className="text-[10px] text-slate-405">Monthly min: ₹{dev.rates?.monthly?.toLocaleString()}</p>
+                          </td>
+                          <td className="p-4 text-slate-500">
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {dev.skills?.map((s: string) => (
+                                <span key={s} className="bg-slate-100 text-slate-700 text-[9px] px-1.5 py-0.5 rounded">{s}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-4 font-semibold font-mono">
+                            {dev.experienceYears} Years
+                          </td>
+                          <td className="p-4 text-right">
+                            {userAccount.isVerified ? (
+                              <span className="bg-emerald-50 text-emerald-700 border border-emerald-150 text-[10px] px-2 py-0.5 rounded font-bold font-mono">Verified Vetted ✅</span>
+                            ) : (
+                              <button
+                                onClick={() => onUpdateUser(dev.userId, { isVerified: true })}
+                                className="bg-brand-teal text-white hover:bg-brand-teal-dark font-extrabold text-[10px] px-2.5 py-1 rounded shadow-sm"
+                              >
+                                Approve Vetting
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+
+        {/* Tab 3: RECRUITER PROFILES */}
+        {adminActiveTab === "recruiters" && (() => {
+          const recList = usersList
+            .filter(u => u.role === "RECRUITER" && u.recProfile)
+            .map(u => u.recProfile)
+            .filter(r => !searchQuery || r.companyName.toLowerCase().includes(searchQuery.toLowerCase()) || r.fullName.toLowerCase().includes(searchQuery.toLowerCase()));
+
+          return (
+            <div className="overflow-x-auto text-slate-800">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50/50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
+                    <th className="p-4 font-bold">Company / Identity</th>
+                    <th className="p-4 font-bold">Representative Name</th>
+                    <th className="p-4 font-bold">Industry Field</th>
+                    <th className="p-4 font-bold">Company Size</th>
+                    <th className="p-4 font-bold">Representative Phone</th>
+                    <th className="p-4 text-right font-bold">Verification Vibe</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {recList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 font-mono">No matching recruiter profiles found.</td>
+                    </tr>
+                  ) : (
+                    recList.map((rec) => {
+                      const userAccount = usersList.find(u => u.id === rec.userId) || {};
+                      return (
+                        <tr key={rec.userId} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="p-4">
+                            <span className="font-bold text-slate-900 block">{rec.companyName}</span>
+                            <span className="text-[10px] text-slate-400 font-mono block mt-0.5">{rec.website || "No site linked"}</span>
+                          </td>
+                          <td className="p-4 font-semibold text-slate-700">
+                            {rec.fullName || "Corporate Rep"}
+                          </td>
+                          <td className="p-4">
+                            <span className="bg-slate-100 text-slate-700 text-[10px] px-2 py-0.5 rounded font-bold">{rec.industry || "Technology"}</span>
+                          </td>
+                          <td className="p-4 font-semibold font-mono">
+                            {rec.companySize || "N/A"} people
+                          </td>
+                          <td className="p-4 font-mono text-slate-655">
+                            {rec.phone || "None Masked"}
+                          </td>
+                          <td className="p-4 text-right">
+                            {userAccount.isVerified ? (
+                              <span className="bg-blue-50 text-blue-700 border border-blue-150 text-[10px] px-2 py-0.5 rounded font-bold font-mono">Trusted Partner</span>
+                            ) : (
+                              <button
+                                onClick={() => onUpdateUser(rec.userId, { isVerified: true })}
+                                className="bg-slate-100 hover:bg-slate-250 text-slate-800 font-bold text-[10px] px-2.5 py-1 rounded"
+                              >
+                                Certify Partner
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+
+        {/* Tab 4: PLATFORM PROJECTS PIPELINE */}
+        {adminActiveTab === "projects" && (() => {
+          const projList = projects.filter(p => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.techStack.join(" ").toLowerCase().includes(searchQuery.toLowerCase()));
+
+          return (
+            <div className="overflow-x-auto text-slate-800">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50/50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
+                    <th className="p-4 font-bold">Project Title & Specs</th>
+                    <th className="p-4 font-bold">Estimated Budget</th>
+                    <th className="p-4 font-bold">Working Mode</th>
+                    <th className="p-4 font-bold">Hiring Type</th>
+                    <th className="p-4 font-bold">Hiring Manager UID</th>
+                    <th className="p-4 text-right font-bold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {projList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 font-mono">No matching project listings currently on the platform.</td>
+                    </tr>
+                  ) : (
+                    projList.map((pr) => (
+                      <tr key={pr.id} className="hover:bg-slate-50/40 transition-colors">
+                        <td className="p-4">
+                          <span className="font-bold text-slate-900 block mb-1">{pr.title}</span>
+                          <span className="text-[10px] text-slate-505 block leading-relaxed line-clamp-2 max-w-sm">{pr.description}</span>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {pr.techStack?.map((t: string) => (
+                              <span key={t} className="bg-slate-100 text-brand-teal-dark text-[9px] px-1.5 font-mono py-0.5 rounded font-semibold">{t}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-4 font-mono font-bold text-slate-900">
+                          ₹{pr.budget.toLocaleString()}
+                        </td>
+                        <td className="p-4 lowercase capitalize font-semibold">
+                          {pr.workMode}
+                        </td>
+                        <td className="p-4 uppercase font-bold text-brand-teal font-mono text-[10px]">
+                          {pr.hiringType}
+                        </td>
+                        <td className="p-4 font-mono text-[10px] text-slate-400">
+                          {pr.recruiterId}
+                        </td>
+                        <td className="p-4 text-right font-bold">
+                          <span className="bg-emerald-50 text-emerald-700 border border-emerald-150 text-[10px] px-2 py-1 rounded">
+                            {pr.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+
+        {/* Tab 5: APPLICATIONS POOL */}
+        {adminActiveTab === "applications" && (() => {
+          const appList = applications.filter(a => !searchQuery || a.coverLetter.toLowerCase().includes(searchQuery.toLowerCase()) || a.developerId.toLowerCase().includes(searchQuery.toLowerCase()));
+
+          return (
+            <div className="overflow-x-auto text-slate-800">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50/50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
+                    <th className="p-4 font-bold">Project Name & Cover Letter</th>
+                    <th className="p-4 font-bold">Developer UID</th>
+                    <th className="p-4 font-bold">Proposed Rate</th>
+                    <th className="p-4 font-bold">Timeframe Estimate</th>
+                    <th className="p-4 font-mono font-bold text-slate-400">Application ID</th>
+                    <th className="p-4 text-right font-bold">Vetting Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {appList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 font-mono">No matching proposal entries currently filed.</td>
+                    </tr>
+                  ) : (
+                    appList.map((ap) => {
+                      const associatedProject = projects.find(p => p.id === ap.projectId) || { title: "Custom FinTech Refactoring" };
+                      return (
+                        <tr key={ap.id} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="p-4">
+                            <span className="font-bold text-slate-900 block mb-1">{associatedProject.title}</span>
+                            <span className="text-[10px] text-slate-500 italic block leading-relaxed line-clamp-2 max-w-sm">"{ap.coverLetter}"</span>
+                          </td>
+                          <td className="p-4 font-semibold font-mono text-[10px]">
+                            {ap.developerId}
+                          </td>
+                          <td className="p-4 font-mono font-bold text-slate-800">
+                            ₹{ap.proposedRate?.toLocaleString()}/hr
+                          </td>
+                          <td className="p-4 text-slate-655 font-semibold font-mono">
+                            {ap.timelineEstimate}
+                          </td>
+                          <td className="p-4 text-slate-400 font-mono text-[10px]">
+                            {ap.id}
+                          </td>
+                          <td className="p-4 text-right font-bold uppercase font-mono text-[10px]">
+                            <span className="bg-amber-50 text-amber-700 border border-amber-150 rounded px-2 py-0.5">
+                              {ap.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* Admin Personal preferences section */}
       <div id="admin-pref-card" className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm">
