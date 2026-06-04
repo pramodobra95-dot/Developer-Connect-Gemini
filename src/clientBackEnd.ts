@@ -619,51 +619,6 @@ const handleMockRequest = async (url: string, init?: RequestInit): Promise<Respo
 // FETCH DECORATOR INSTALLER
 // ----------------------------------------------------
 export const setupClientBackEnd = () => {
-  initializeStorageDatabase();
-
-  const originalFetch = window.fetch;
-
-  const customFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as any).url || "";
-
-    if (url.startsWith("/api/")) {
-      // Dynamic probe activation
-      if ((window as any)._isBackendChecked === undefined) {
-        try {
-          const testRes = await originalFetch("/api/session");
-          const ct = testRes.headers.get("content-type");
-          if (testRes.ok && ct && ct.includes("application/json")) {
-            (window as any)._useClientMock = false;
-          } else {
-            (window as any)._useClientMock = true;
-          }
-        } catch (e) {
-          (window as any)._useClientMock = true;
-        }
-        (window as any)._isBackendChecked = true;
-      }
-
-      if ((window as any)._useClientMock) {
-        return handleMockRequest(url, init);
-      }
-    }
-
-    return originalFetch.apply(window, [input, init]);
-  };
-
-  try {
-    Object.defineProperty(window, "fetch", {
-      value: customFetch,
-      configurable: true,
-      writable: true,
-      enumerable: true
-    });
-  } catch (error) {
-    console.warn("Could not redefine window.fetch with Object.defineProperty, trying direct reference update", error);
-    try {
-      (window as any).fetch = customFetch;
-    } catch (err2) {
-      console.error("Unable to patch window.fetch automatically", err2);
-    }
-  }
+  // Mock mode disabled to ensure multi-device sync via real Express server
+  console.log("Client backend interceptor disabled. All requests routing to server.");
 };
