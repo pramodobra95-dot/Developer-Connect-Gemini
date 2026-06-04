@@ -3,6 +3,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+
+declare global {
+  namespace Express {
+    interface Request {
+      userId: string;
+    }
+  }
+}
 import dotenv from "dotenv";
 import { 
   UserRole, 
@@ -57,7 +65,8 @@ import {
   dbGetDisputes,
   dbSaveDispute,
   dbGetReviews,
-  dbSaveReview
+  dbSaveReview,
+  getSupabaseClient
 } from "./server/supabaseService.js";
 
 dotenv.config();
@@ -796,7 +805,7 @@ export async function setupApp(app: express.Express) {
         recProfile: recruiterProfiles[user.id] || null
       };
     });
-    res.json(combined);
+    res.json({ success: true, users: combined });
   });
 
   app.post("/api/users/update", async (req, res) => {
@@ -807,7 +816,7 @@ export async function setupApp(app: express.Express) {
       if (typeof isSuspended === "boolean") users[userIndex].isSuspended = isSuspended;
       if (role) {
         if (role === UserRole.ADMIN && users[userIndex].email.toLowerCase().trim() !== "info.bouuz@gmail.com") {
-          return res.status(403).json({ error: "Only info.bouuz@gmail.com is authorized to hold the Administrator role." });
+          return res.status(403).json({ success: false, error: "Only info.bouuz@gmail.com is authorized to hold the Administrator role." });
         }
         users[userIndex].role = role;
         
@@ -853,13 +862,13 @@ export async function setupApp(app: express.Express) {
       await syncUser(users[userIndex]);
       res.json({ success: true, user: users[userIndex] });
     } else {
-      res.status(404).json({ error: "User not found" });
+      res.status(404).json({ success: false, error: "User not found" });
     }
   });
 
   app.post("/api/users/preferences", async (req: any, res) => {
     if (req.userId === "guest") {
-      return res.status(401).json({ error: "Unauthenticated" });
+      return res.status(401).json({ success: false, error: "Unauthenticated" });
     }
     const userIndex = users.findIndex(u => u.id === req.userId);
     if (userIndex !== -1) {
@@ -873,7 +882,7 @@ export async function setupApp(app: express.Express) {
       await syncUser(users[userIndex]);
       res.json({ success: true, user: users[userIndex] });
     } else {
-      res.status(404).json({ error: "User not found" });
+      res.status(404).json({ success: false, error: "User not found" });
     }
   });
 
@@ -935,7 +944,7 @@ export async function setupApp(app: express.Express) {
 
   // Projects endpoint
   app.get("/api/projects", (req, res) => {
-    res.json(projects);
+    res.json({ success: true, projects });
   });
 
   app.post("/api/projects", (req: any, res) => {
@@ -970,7 +979,7 @@ export async function setupApp(app: express.Express) {
       syncProject(proj);
       res.json({ success: true, project: proj });
     } else {
-      res.status(404).json({ error: "Project not found" });
+      res.status(404).json({ success: false, error: "Project not found" });
     }
   });
 
@@ -978,7 +987,7 @@ export async function setupApp(app: express.Express) {
   // PROJECT STAGES & MILESTONES API
   // ----------------------------------------------------
   app.get("/api/project-stages", (req, res) => {
-    res.json(projectStages);
+    res.json({ success: true, projectStages });
   });
 
   app.post("/api/project-stages", (req, res) => {
@@ -1024,7 +1033,7 @@ export async function setupApp(app: express.Express) {
       syncProjectStage(stage);
       res.json({ success: true, stage });
     } else {
-      res.status(404).json({ error: "Stage not found" });
+      res.status(404).json({ success: false, error: "Stage not found" });
     }
   });
 
@@ -1036,7 +1045,7 @@ export async function setupApp(app: express.Express) {
       syncProjectStage(stage);
       res.json({ success: true, stage });
     } else {
-      res.status(404).json({ error: "Stage not found" });
+      res.status(404).json({ success: false, error: "Stage not found" });
     }
   });
 
@@ -1044,7 +1053,7 @@ export async function setupApp(app: express.Express) {
   // SECURE DIGITAL NDA CONTRACTS API
   // ----------------------------------------------------
   app.get("/api/ndas", (req, res) => {
-    res.json(ndas);
+    res.json({ success: true, ndas });
   });
 
   app.post("/api/ndas", (req: any, res) => {
@@ -1106,7 +1115,7 @@ This Non-Disclosure Agreement (the "Agreement") is entered into by and between $
 
     if (!ai) {
       console.warn("Gemini is unconfigured. Returning premium fallback NDA draft.");
-      return res.json({ terms: fallbackTerms });
+      return res.json({ success: true, terms: fallbackTerms });
     }
 
     try {
@@ -1124,10 +1133,10 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       });
 
       const extractedText = response.text || fallbackTerms;
-      res.json({ terms: extractedText });
+      res.json({ success: true, terms: extractedText });
     } catch (err: any) {
       console.error("Gemini NDA generation failed. Falling back to structured schema.", err);
-      res.json({ terms: fallbackTerms });
+      res.json({ success: true, terms: fallbackTerms });
     }
   });
 
@@ -1135,7 +1144,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     const { ndaId, role, signature } = req.body;
     const nda = ndas.find(n => n.id === ndaId);
     if (!nda) {
-      return res.status(404).json({ error: "NDA not found" });
+      return res.status(404).json({ success: false, error: "NDA not found" });
     }
 
     if (role === "RECRUITER") {
@@ -1164,7 +1173,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     
     const proj = projects.find(p => p.id === projectId);
     if (!proj) {
-      return res.status(404).json({ error: "Project not found" });
+      return res.status(404).json({ success: false, error: "Project not found" });
     }
 
     proj.status = ProjectStatus.IN_REVIEW;
@@ -1226,7 +1235,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
   // Applications endpoint
   app.get("/api/applications", (req, res) => {
-    res.json(applications);
+    res.json({ success: true, applications });
   });
 
   app.post("/api/applications", (req: any, res) => {
@@ -1293,7 +1302,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
       res.json({ success: true, application: appRecord });
     } else {
-      res.status(404).json({ error: "Application not found" });
+      res.status(404).json({ success: false, error: "Application not found" });
     }
   });
 
@@ -1322,7 +1331,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
   // Invites endpoint
   app.get("/api/invites", (req, res) => {
-    res.json(invites);
+    res.json({ success: true, invites });
   });
 
   app.post("/api/invites", (req: any, res) => {
@@ -1362,13 +1371,13 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       syncInvite(inv);
       res.json({ success: true, invite: inv });
     } else {
-      res.status(404).json({ error: "Invite not found" });
+      res.status(404).json({ success: false, error: "Invite not found" });
     }
   });
 
   // Contact requests endpoint
   app.get("/api/contacts", (req, res) => {
-    res.json(contactAccessRequests);
+    res.json({ success: true, contactAccessRequests });
   });
 
   app.post("/api/contacts/request", (req: any, res) => {
@@ -1416,7 +1425,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       syncContactRequest(reqRecord);
       res.json({ success: true, request: reqRecord });
     } else {
-      res.status(404).json({ error: "Request not found" });
+      res.status(404).json({ success: false, error: "Request not found" });
     }
   });
 
@@ -1424,12 +1433,12 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   app.get("/api/chats", (req: any, res) => {
     // Return chats involving current user
     const userChats = chats.filter(c => c.developerId === req.userId || c.recruiterId === req.userId);
-    res.json(userChats);
+    res.json({ success: true, chats: userChats });
   });
 
   app.get("/api/messages/:chatId", (req, res) => {
     const chatMessages = messages.filter(m => m.chatId === req.params.chatId);
-    res.json(chatMessages);
+    res.json({ success: true, messages: chatMessages });
   });
 
   app.post("/api/messages", (req: any, res) => {
@@ -1488,7 +1497,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       syncChat(chat);
       res.json({ success: true, chat });
     } else {
-      res.status(404).json({ error: "Chat thread not found" });
+      res.status(404).json({ success: false, error: "Chat thread not found" });
     }
   });
 
@@ -1497,7 +1506,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     const { chatId } = req.params;
     const chat = chats.find(c => c.id === chatId);
     if (!chat) {
-      return res.status(404).json({ error: "Chat not found" });
+      return res.status(404).json({ success: false, error: "Chat not found" });
     }
 
     // Determine current user context
@@ -1640,7 +1649,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     };
 
     if (!ai) {
-      return res.json({ source: "fallback", suggestions: getFallbackSuggestions() });
+      return res.json({ success: true, source: "fallback", suggestions: getFallbackSuggestions() });
     }
 
     try {
@@ -1721,19 +1730,19 @@ Instructions:
 
       const parsed = JSON.parse(response.text || "{}");
       if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
-        return res.json({ source: "gemini", model: usedModel, suggestions: parsed.suggestions });
+        return res.json({ success: true, source: "gemini", model: usedModel, suggestions: parsed.suggestions });
       } else {
         throw new Error("Invalid suggestions structure");
       }
     } catch (err: any) {
       console.log("[Prompt Engine] Activating secure local fallback suggestions engine.");
-      return res.json({ source: "fallback_on_error", suggestions: getFallbackSuggestions() });
+      return res.json({ success: true, source: "fallback_on_error", suggestions: getFallbackSuggestions() });
     }
   });
 
   // Disputes & escrow
   app.get("/api/disputes", (req, res) => {
-    res.json(disputes);
+    res.json({ success: true, disputes });
   });
 
   app.post("/api/disputes", (req: any, res) => {
@@ -1771,14 +1780,14 @@ Instructions:
       syncDispute(disp);
       res.json({ success: true, dispute: disp });
     } else {
-      res.status(404).json({ error: "Dispute not found" });
+      res.status(404).json({ success: false, error: "Dispute not found" });
     }
   });
 
   // Notifications
   app.get("/api/notifications", (req: any, res) => {
     const userNotifications = notifications.filter(n => n.userId === req.userId || (req.userId === "admin" && n.userId === "admin"));
-    res.json(userNotifications);
+    res.json({ success: true, notifications: userNotifications });
   });
 
   app.post("/api/notifications/read", (req: any, res) => {
@@ -1798,19 +1807,19 @@ Instructions:
       syncNotification(notif);
       res.json({ success: true });
     } else {
-      res.status(404).json({ error: "Notification not found" });
+      res.status(404).json({ success: false, error: "Notification not found" });
     }
   });
 
   // Reviews APIs
   app.get("/api/reviews", (req, res) => {
-    res.json(reviews);
+    res.json({ success: true, reviews });
   });
 
   app.post("/api/reviews", (req, res) => {
     const { projectId, reviewerId, reviewerName, revieweeId, rating, comment } = req.body;
     if (!reviewerId || !revieweeId || !rating || !comment) {
-      return res.status(400).json({ error: "Missing required review parameters." });
+      return res.status(400).json({ success: false, error: "Missing required review parameters." });
     }
     const newReview: Review = {
       id: "rev-" + Math.random().toString(36).substring(2, 9),
@@ -1824,12 +1833,13 @@ Instructions:
     };
     reviews.push(newReview);
     syncReview(newReview);
-    res.json(newReview);
+    res.json({ success: true, review: newReview });
   });
 
   // Supabase connection and status query endpoint (for administrative views or diagnostics panel)
   app.get("/api/supabase/status", (req, res) => {
     res.json({
+      success: true,
       configured: isSupabaseConfigured(),
       endpoint: process.env.SUPABASE_URL || "NOT SET",
       setupSql: SUPABASE_SETUP_SQL,
@@ -1885,6 +1895,7 @@ Instructions:
     }
 
     res.json({
+      success: true,
       configured,
       urlSource,
       keySource,
@@ -1905,6 +1916,7 @@ Instructions:
       
       if (type === "project-analysis") {
         return res.json({
+          success: true,
           suggestedTech: ["React", "Node.js", "Docker", "AWS", "PostgreSQL", "Redis"],
           recommendedRoles: ["Senior Backend Engineer", "DevOps Specialist"],
           confidence: 94,
@@ -1912,12 +1924,14 @@ Instructions:
         });
       } else if (type === "profile-optimization") {
         return res.json({
+          success: true,
           optimizedHeadline: "Principal Backend Architect | High-Scale Go & Next.js Microservices",
           optimizedBio: "Elite Full-Stack System Architect with over 8 years experience building highly concurrent transactional infrastructures. Specializes in building sub-100ms AWS microservices with rigorous test compliance, handling peak loads of up to 12,000 requests/minute.",
           suggestedSkillsToLearn: ["Go (Golang)", "Kubernetes (K8s)", "gRPC / Protobuf"]
         });
       } else if (type === "proposal-generation") {
         return res.json({
+          success: true,
           title: "Proposal for Next-Gen E-commerce Backend Architecture",
           pitch: `Hi, I saw your post for the Next-Gen E-commerce Backend Architecture. 
 
@@ -1926,7 +1940,7 @@ With over 8 years of specialized software construction experience, I have succes
 I proposed a structured, milestone-oriented execution approach. Let me know if you would like to hop on a quick video session to align the initial API blueprint specifications.`
         });
       }
-      return res.status(400).json({ error: "Unsupported analysis type" });
+      return res.status(400).json({ success: false, error: "Unsupported analysis type" });
     }
 
     try {
@@ -1962,7 +1976,8 @@ Strictly return the JSON matching this exact structure without any formatting wr
         });
 
         const dataStr = response.text || "{}";
-        return res.json(JSON.parse(dataStr));
+        const parsed = JSON.parse(dataStr);
+        return res.json({ success: true, ...parsed });
 
       } else if (type === "profile-optimization") {
         const prompt = `Optimize the following developer profile to match premium recruiters on "DeveloperConnect":
@@ -1996,7 +2011,8 @@ Strictly return the JSON matching this exact structure without any formatting wr
         });
 
         const dataStr = response.text || "{}";
-        return res.json(JSON.parse(dataStr));
+        const parsed = JSON.parse(dataStr);
+        return res.json({ success: true, ...parsed });
 
       } else if (type === "proposal-generation") {
         const prompt = `Generate a compelling, personalized cover letter / proposal brief:
@@ -2026,22 +2042,24 @@ Strictly return the JSON matching this exact structure without any formatting wr
         });
 
         const dataStr = response.text || "{}";
-        return res.json(JSON.parse(dataStr));
+        const parsed = JSON.parse(dataStr);
+        return res.json({ success: true, ...parsed });
       }
 
-      res.status(400).json({ error: "Unsupported analysis type" });
+      res.status(400).json({ success: false, error: "Unsupported analysis type" });
     } catch (e: any) {
       console.error("Gemini API call failed, using high-fidelity fallback.", e);
       // Failover fallback in case of rate limits or service constraints
       if (type === "project-analysis") {
         return res.json({
+          success: true,
           suggestedTech: ["React", "Node.js", "Jest", "Microservices"],
           recommendedRoles: ["Backend Engineer"],
           confidence: 88,
           estimatedDays: 30
         });
       }
-      res.status(500).json({ error: e.message || "Failed AI response" });
+      res.status(500).json({ success: false, error: e.message || "Failed AI response" });
     }
   });
 
