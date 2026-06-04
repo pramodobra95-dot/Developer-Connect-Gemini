@@ -572,17 +572,9 @@ export async function setupApp(app: express.Express) {
   });
 
   // Real-time Supabase request hydration middleware
+  // Optimized: Removed full hydration on every request to prevent timeouts.
+  // Full hydration is performed only on server startup.
   app.use("/api", async (req: any, res, next) => {
-    if (req.path === "/supabase/status" || req.path === "/session/logout") {
-      return next();
-    }
-    if (isSupabaseConfigured()) {
-      try {
-        await initializeSupabaseSync();
-      } catch (err) {
-        console.error("🔴 Supabase live request middleware hydration failed:", err);
-      }
-    }
     next();
   });
 
@@ -1814,6 +1806,48 @@ Instructions:
         ndas: ndas.length,
         notifications: notifications.length
       }
+    });
+  });
+
+  app.get("/api/diag/supabase", async (req, res) => {
+    const urlSource = process.env.SUPABASE_URL ? "SUPABASE_URL" : (process.env.NEXT_PUBLIC_SUPABASE_URL ? "NEXT_PUBLIC_SUPABASE_URL" : "None");
+    const keySource = process.env.SUPABASE_ANON_KEY ? "SUPABASE_ANON_KEY" : (process.env.SUPABASE_KEY ? "SUPABASE_KEY" : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : "None"));
+
+    const configured = isSupabaseConfigured();
+    const supabase = (global as any).getSupabaseClient ? (global as any).getSupabaseClient() : null; // This might be tricky as it's not exported to global. Let's import it if possible or just use what we have.
+
+    // Better way: we already import getSupabaseClient in server.ts (actually we don't, we import from ./server/supabaseService.js)
+    const { getSupabaseClient } = await import("./server/supabaseService.js");
+    const client = getSupabaseClient();
+
+    const tableChecks: Record<string, string> = {};
+    const tables = [
+      'users', 'developer_profiles', 'recruiter_profiles', 'projects',
+      'applications', 'invites', 'chats', 'messages', 'notifications',
+      'disputes', 'project_stages', 'ndas', 'reviews'
+    ];
+
+    if (client) {
+      for (const table of tables) {
+        try {
+          const { error } = await client.from(table).select('*', { count: 'exact', head: true }).limit(1);
+          if (error) {
+            tableChecks[table] = `❌ ${error.message}`;
+          } else {
+            tableChecks[table] = "✅ OK";
+          }
+        } catch (e: any) {
+          tableChecks[table] = `❌ Exception: ${e.message}`;
+        }
+      }
+    }
+
+    res.json({
+      configured,
+      urlSource,
+      keySource,
+      connectionStatus: configured ? "🟢 Active" : "🔴 Not configured",
+      tableChecks
     });
   });
 
