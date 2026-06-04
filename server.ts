@@ -550,16 +550,18 @@ async function syncDispute(disp: any) {
 // ----------------------------------------------------
 // Express Setup
 // ----------------------------------------------------
-async function startServer() {
-  const app = express();
+export const app = express();
+
+// Hydrate Supabase on Server Startup (non-blocking for container health compliance)
+initializeSupabaseSync().catch(err => {
+  console.error("🔴 Failed to perform initial Supabase hydration checks:", err);
+});
+
+app.use(express.json());
+
+// Configure all routes and middleware on the app instance
+export async function setupApp(app: express.Express) {
   const PORT = 3000;
-
-  // Hydrate Supabase on Server Startup (non-blocking for container health compliance)
-  initializeSupabaseSync().catch(err => {
-    console.error("🔴 Failed to perform initial Supabase hydration checks:", err);
-  });
-
-  app.use(express.json());
 
   // Simple Session Middleware
   app.use((req: any, res, next) => {
@@ -1985,9 +1987,14 @@ Strictly return the JSON matching this exact structure without any formatting wr
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
-startServer();
+// Start the app configuration
+setupApp(app).catch(err => {
+  console.error("🔴 Failed to setup Express app:", err);
+});
