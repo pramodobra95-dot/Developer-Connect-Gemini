@@ -55,7 +55,9 @@ import {
   dbGetNotifications,
   dbSaveNotification,
   dbGetDisputes,
-  dbSaveDispute
+  dbSaveDispute,
+  dbGetReviews,
+  dbSaveReview
 } from "./server/supabaseService.js";
 
 dotenv.config();
@@ -80,7 +82,6 @@ if (geminiApiKey) {
 // ----------------------------------------------------
 // Mock Databases
 // ----------------------------------------------------
-let currentUserId = ""; // Default session user empty (no active logged in session)
 
 let users = [
   { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } },
@@ -301,6 +302,13 @@ async function initializeSupabaseSync() {
   if (isSupabaseConfigured()) {
     console.log("🔄 Hydrating local in-memory DB tables with Supabase database content...");
     try {
+      // 0. Reviews
+      const dbRevs = await dbGetReviews([]);
+      if (dbRevs && dbRevs.length > 0) {
+        reviews.length = 0;
+        reviews.push(...dbRevs);
+      }
+
       // 1. Users
       const dbUsers = await dbGetUsers([]);
       if (dbUsers && dbUsers.length > 0) {
@@ -407,6 +415,15 @@ async function initializeSupabaseSync() {
       console.log("✨ Supabase in-memory sync hydration completed successfully.");
     } catch (err) {
       console.error("🔴 Supabase in-memory sync hydration failed partially (usually due to unseeded schema tables):", err);
+    }
+  }
+}
+async function syncReview(review: any) {
+  if (isSupabaseConfigured()) {
+    try {
+      await dbSaveReview(review);
+    } catch (e) {
+      console.error("Sync review fail", e);
     }
   }
 }
@@ -544,8 +561,16 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Simple Session Middleware
+  app.use((req: any, res, next) => {
+    const cookies = req.headers.cookie || "";
+    const match = cookies.match(/userId=([^;]+)/);
+    req.userId = match ? match[1] : "guest";
+    next();
+  });
+
   // Real-time Supabase request hydration middleware
-  app.use("/api", async (req, res, next) => {
+  app.use("/api", async (req: any, res, next) => {
     if (req.path === "/supabase/status" || req.path === "/session/logout") {
       return next();
     }
@@ -564,11 +589,11 @@ async function startServer() {
   // ----------------------------------------------------
 
   // Current session routing (Simulated auth switcher)
-  app.get("/api/session", (req, res) => {
-    if (currentUserId === "guest") {
+  app.get("/api/session", (req: any, res) => {
+    if (req.userId === "guest") {
       return res.json({ user: null, devProfile: null, recProfile: null });
     }
-    const user = users.find(u => u.id === currentUserId);
+    const user = users.find(u => u.id === req.userId);
     if (!user) {
       return res.json({ user: null, devProfile: null, recProfile: null });
     }
@@ -593,7 +618,7 @@ async function startServer() {
       if (user.isSuspended) {
         return res.status(403).json({ error: "This account has been suspended by administration." });
       }
-      currentUserId = user.id;
+      res.setHeader('Set-Cookie', `userId=${user.id}; Path=/; HttpOnly; SameSite=Strict`);
       const devProfile = developerProfiles[user.id] || null;
       const recProfile = recruiterProfiles[user.id] || null;
       res.json({ success: true, user, devProfile, recProfile });
@@ -603,7 +628,7 @@ async function startServer() {
   });
 
   app.post("/api/session/logout", (req, res) => {
-    currentUserId = "guest";
+    res.setHeader('Set-Cookie', `userId=guest; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
     res.json({ success: true });
   });
 
@@ -697,7 +722,7 @@ async function startServer() {
       await syncUser(newUser);
     }
 
-    currentUserId = id;
+    res.setHeader('Set-Cookie', `userId=${id}; Path=/; HttpOnly; SameSite=Strict`);
     addAdminNotification("New User Registered", `${fullName || companyName || "New user"} signed up as a new ${role}.`);
     res.json({ 
       success: true, 
@@ -711,7 +736,7 @@ async function startServer() {
     const { userId } = req.body;
     const user = users.find(u => u.id === userId);
     if (user) {
-      currentUserId = userId;
+      res.setHeader('Set-Cookie', `userId=${userId}; Path=/; HttpOnly; SameSite=Strict`);
       res.json({ success: true, user });
     } else {
       res.status(404).json({ error: "User not found" });
@@ -796,11 +821,11 @@ async function startServer() {
     }
   });
 
-  app.post("/api/users/preferences", async (req, res) => {
-    if (currentUserId === "guest") {
+  app.post("/api/users/preferences", async (req: any, res) => {
+    if (req.userId === "guest") {
       return res.status(401).json({ error: "Unauthenticated" });
     }
-    const userIndex = users.findIndex(u => u.id === currentUserId);
+    const userIndex = users.findIndex(u => u.id === req.userId);
     if (userIndex !== -1) {
       users[userIndex].notificationPreferences = {
         emailNewInvites: true,
@@ -877,12 +902,12 @@ async function startServer() {
     res.json(projects);
   });
 
-  app.post("/api/projects", (req, res) => {
+  app.post("/api/projects", (req: any, res) => {
     const { title, description, techStack, budget, hiringType, workMode, duration, aiMetrics } = req.body;
     const id = "proj-" + Math.random().toString(36).substring(2, 9);
     const newProject: Project = {
       id,
-      recruiterId: currentUserId,
+      recruiterId: req.userId,
       title,
       description,
       techStack: techStack || ["React", "Node.js"],
@@ -986,7 +1011,7 @@ async function startServer() {
     res.json(ndas);
   });
 
-  app.post("/api/ndas", (req, res) => {
+  app.post("/api/ndas", (req: any, res) => {
     const { projectId, developerId, terms } = req.body;
     const id = "nda-" + Math.random().toString(36).substring(2, 9);
     
@@ -1003,7 +1028,7 @@ async function startServer() {
     }
 
     const proj = projects.find(p => p.id === projectId);
-    const recruiterId = proj ? proj.recruiterId : currentUserId;
+    const recruiterId = proj ? proj.recruiterId : req.userId;
 
     const newNda: NDA = {
       id,
@@ -1098,7 +1123,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   // ----------------------------------------------------
   // RECRUITER QUICK-HIRE DIRECT ENGAGEMENT API
   // ----------------------------------------------------
-  app.post("/api/projects/quick-hire", (req, res) => {
+  app.post("/api/projects/quick-hire", (req: any, res) => {
     const { projectId, developerId, proposedRate, timelineEstimate, coverLetter } = req.body;
     
     const proj = projects.find(p => p.id === projectId);
@@ -1132,12 +1157,12 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     }
 
     // Establish dynamic chats immediately
-    let existingChat = chats.find(c => c.developerId === developerId && c.recruiterId === currentUserId);
+    let existingChat = chats.find(c => c.developerId === developerId && c.recruiterId === req.userId);
     if (!existingChat) {
       existingChat = {
         id: "chat-" + Math.random().toString(36).substring(2, 9),
         developerId,
-        recruiterId: currentUserId,
+        recruiterId: req.userId,
         lastMessageText: "Quick Hire order established. Welcome to the workspace!",
         updatedAt: new Date().toISOString()
       };
@@ -1168,13 +1193,13 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     res.json(applications);
   });
 
-  app.post("/api/applications", (req, res) => {
+  app.post("/api/applications", (req: any, res) => {
     const { projectId, coverLetter, proposedRate, availability, timelineEstimate } = req.body;
     const id = "app-" + Math.random().toString(36).substring(2, 9);
     const newApp: Application = {
       id,
       projectId,
-      developerId: currentUserId,
+      developerId: req.userId,
       coverLetter,
       proposedRate: Number(proposedRate) || 500,
       availability: availability || "Both",
@@ -1237,26 +1262,26 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   // Profile management endpoint
-  app.post("/api/profile/developer", async (req, res) => {
+  app.post("/api/profile/developer", async (req: any, res) => {
     const profile = req.body;
-    developerProfiles[currentUserId] = {
-      ...developerProfiles[currentUserId],
+    developerProfiles[req.userId] = {
+      ...developerProfiles[req.userId],
       ...profile,
-      userId: currentUserId
+      userId: req.userId
     };
-    await syncDevProfile(currentUserId, developerProfiles[currentUserId]);
-    res.json({ success: true, profile: developerProfiles[currentUserId] });
+    await syncDevProfile(req.userId, developerProfiles[req.userId]);
+    res.json({ success: true, profile: developerProfiles[req.userId] });
   });
 
-  app.post("/api/profile/recruiter", async (req, res) => {
+  app.post("/api/profile/recruiter", async (req: any, res) => {
     const profile = req.body;
-    recruiterProfiles[currentUserId] = {
-      ...recruiterProfiles[currentUserId],
+    recruiterProfiles[req.userId] = {
+      ...recruiterProfiles[req.userId],
       ...profile,
-      userId: currentUserId
+      userId: req.userId
     };
-    await syncRecProfile(currentUserId, recruiterProfiles[currentUserId]);
-    res.json({ success: true, profile: recruiterProfiles[currentUserId] });
+    await syncRecProfile(req.userId, recruiterProfiles[req.userId]);
+    res.json({ success: true, profile: recruiterProfiles[req.userId] });
   });
 
   // Invites endpoint
@@ -1264,13 +1289,13 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     res.json(invites);
   });
 
-  app.post("/api/invites", (req, res) => {
+  app.post("/api/invites", (req: any, res) => {
     const { projectId, developerId, message } = req.body;
     const id = "inv-" + Math.random().toString(36).substring(2, 9);
     const newInvite: Invite = {
       id,
       projectId,
-      recruiterId: currentUserId,
+      recruiterId: req.userId,
       developerId,
       message: message || "We would love for you to checkout our project!",
       status: InviteStatus.PENDING,
@@ -1310,12 +1335,12 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     res.json(contactAccessRequests);
   });
 
-  app.post("/api/contacts/request", (req, res) => {
+  app.post("/api/contacts/request", (req: any, res) => {
     const { developerId } = req.body;
     const id = "con-" + Math.random().toString(36).substring(2, 9);
     const newRequest: ContactAccessRequest = {
       id,
-      recruiterId: currentUserId,
+      recruiterId: req.userId,
       developerId,
       status: "PENDING",
       createdAt: new Date().toISOString()
@@ -1360,9 +1385,9 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   // Chats & messaging
-  app.get("/api/chats", (req, res) => {
+  app.get("/api/chats", (req: any, res) => {
     // Return chats involving current user
-    const userChats = chats.filter(c => c.developerId === currentUserId || c.recruiterId === currentUserId);
+    const userChats = chats.filter(c => c.developerId === req.userId || c.recruiterId === req.userId);
     res.json(userChats);
   });
 
@@ -1371,13 +1396,13 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     res.json(chatMessages);
   });
 
-  app.post("/api/messages", (req, res) => {
+  app.post("/api/messages", (req: any, res) => {
     const { chatId, receiverId, text, fileUrl, fileType } = req.body;
     const id = "msg-" + Math.random().toString(36).substring(2, 9);
     const newMsg: Message = {
       id,
       chatId,
-      senderId: currentUserId,
+      senderId: req.userId,
       receiverId,
       text,
       fileUrl,
@@ -1432,7 +1457,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   // Gemini suggested actions generator
-  app.get("/api/chats/:chatId/suggested-actions", async (req, res) => {
+  app.get("/api/chats/:chatId/suggested-actions", async (req: any, res) => {
     const { chatId } = req.params;
     const chat = chats.find(c => c.id === chatId);
     if (!chat) {
@@ -1440,7 +1465,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     }
 
     // Determine current user context
-    const isDeveloper = (currentUserId === chat.developerId);
+    const isDeveloper = (req.userId === chat.developerId);
     const roleLabel = isDeveloper ? "Developer" : "Recruiter";
 
     // Gather past messages
@@ -1675,14 +1700,14 @@ Instructions:
     res.json(disputes);
   });
 
-  app.post("/api/disputes", (req, res) => {
+  app.post("/api/disputes", (req: any, res) => {
     const { projectId, milestoneTitle, opponentId, reason, details, escrowAmount, proposedResolution } = req.body;
     const id = "disp-" + Math.random().toString(36).substring(2, 9);
     const newDispute: Dispute = {
       id,
       projectId,
       milestoneTitle,
-      claimantId: currentUserId,
+      claimantId: req.userId,
       opponentId,
       reason,
       details,
@@ -1715,16 +1740,16 @@ Instructions:
   });
 
   // Notifications
-  app.get("/api/notifications", (req, res) => {
-    const userNotifications = notifications.filter(n => n.userId === currentUserId || (currentUserId === "admin" && n.userId === "admin"));
+  app.get("/api/notifications", (req: any, res) => {
+    const userNotifications = notifications.filter(n => n.userId === req.userId || (req.userId === "admin" && n.userId === "admin"));
     res.json(userNotifications);
   });
 
-  app.post("/api/notifications/read", (req, res) => {
+  app.post("/api/notifications/read", (req: any, res) => {
     const { notificationId } = req.body;
     if (notificationId === "all") {
       notifications.forEach(n => {
-        if (n.userId === currentUserId || (currentUserId === "admin" && n.userId === "admin")) {
+        if (n.userId === req.userId || (req.userId === "admin" && n.userId === "admin")) {
           n.isRead = true;
           syncNotification(n);
         }
@@ -1762,6 +1787,7 @@ Instructions:
       createdAt: new Date().toISOString()
     };
     reviews.push(newReview);
+    syncReview(newReview);
     res.json(newReview);
   });
 

@@ -458,6 +458,50 @@ export async function dbSaveUser(user: any): Promise<boolean> {
   }
 }
 
+// Reviews
+export async function dbGetReviews(fallback: any[]): Promise<any[]> {
+  if (!supabase) return fallback;
+  try {
+    const { data, error } = await supabase.from("reviews").select("*");
+    if (error) throw error;
+    return data.map(r => ({
+      id: r.id,
+      projectId: r.project_id,
+      reviewerId: r.reviewer_id,
+      reviewerName: r.reviewer_name,
+      revieweeId: r.reviewee_id,
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.created_at
+    }));
+  } catch (err) {
+    console.warn("Supabase dbGetReviews failed.", err);
+    return fallback;
+  }
+}
+
+export async function dbSaveReview(review: any): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const payload = {
+      id: review.id,
+      project_id: review.projectId,
+      reviewer_id: review.reviewerId,
+      reviewer_name: review.reviewerName,
+      reviewee_id: review.revieweeId,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: review.createdAt
+    };
+    const { error } = await supabase.from("reviews").upsert(payload, { onConflict: "id" });
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error("Supabase dbSaveReview failed:", err);
+    return false;
+  }
+}
+
 // Developer Profiles
 export async function dbGetDeveloperProfiles(fallback: Record<string, any>): Promise<Record<string, any>> {
   if (!supabase) return fallback;
