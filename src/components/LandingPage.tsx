@@ -83,7 +83,19 @@ export default function LandingPage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: formattedEmail })
         });
-        const data = await resp.json();
+
+        let data;
+        try {
+          data = await resp.json();
+        } catch (parseErr) {
+          console.error(`[GOOGLE AUTH] Failed to parse JSON from /api/session/login. Status: ${resp.status}`);
+          const text = await resp.text();
+          console.error(`[GOOGLE AUTH] Raw response: ${text}`);
+          setErrorMessage("A server error occurred (invalid response). Please contact support.");
+          setShowGoogleModal(false);
+          return;
+        }
+
         if (resp.ok) {
           setSuccessMessage(`Google ID ${formattedEmail} authenticated successfully! Syncing BANTConfirm Gateway...`);
           setShowGoogleModal(false);
@@ -91,12 +103,13 @@ export default function LandingPage({
             onLoginSuccess();
           }, 1000);
         } else {
-          setErrorMessage(`Google Account (${formattedEmail}) is not registered yet on DeveloperConnect. We've switched this modal to 'Sign Up' so you can complete your profile registration!`);
+          setErrorMessage(data.error || `Google Account (${formattedEmail}) is not registered yet.`);
           setGoogleModalTab("signup");
           setGoogleName(formattedEmail.split("@")[0]);
         }
-      } catch {
-        setErrorMessage("Network connection timed out during Google Auth.");
+      } catch (err: any) {
+        console.error("[GOOGLE AUTH] Network error during login:", err);
+        setErrorMessage("Network connection error during Google Auth.");
         setShowGoogleModal(false);
       }
     } else {
@@ -122,7 +135,19 @@ export default function LandingPage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const data = await resp.json();
+
+        let data;
+        try {
+          data = await resp.json();
+        } catch (parseErr) {
+          console.error(`[GOOGLE AUTH] Failed to parse JSON from /api/session/signup. Status: ${resp.status}`);
+          const text = await resp.text();
+          console.error(`[GOOGLE AUTH] Raw response: ${text}`);
+          setErrorMessage("A server error occurred (invalid response during signup).");
+          setShowGoogleModal(false);
+          return;
+        }
+
         if (resp.ok) {
           setSuccessMessage(`Google registration successful for ${formattedEmail}! Logging in...`);
           setShowGoogleModal(false);
@@ -133,7 +158,8 @@ export default function LandingPage({
           setErrorMessage(data.error || "Failed to complete Google Sign Up.");
           setShowGoogleModal(false);
         }
-      } catch {
+      } catch (err: any) {
+        console.error("[GOOGLE AUTH] Network error during signup:", err);
         setErrorMessage("Network error during Google registration.");
         setShowGoogleModal(false);
       }
@@ -167,7 +193,18 @@ export default function LandingPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: targetEmail })
       });
-      const data = await resp.json();
+
+      let data;
+      try {
+        data = await resp.json();
+      } catch (parseErr) {
+        console.error(`[LOGIN] Failed to parse JSON from /api/session/login. Status: ${resp.status}`);
+        const text = await resp.text();
+        console.error(`[LOGIN] Raw response: ${text}`);
+        setErrorMessage("A server error occurred (invalid response). Please try again later.");
+        return;
+      }
+
       if (resp.ok) {
         setSuccessMessage("Authentication signed off! Swapping to secure session workspace...");
         setTimeout(() => {
@@ -183,7 +220,8 @@ export default function LandingPage({
         }
       }
     } catch (err: any) {
-      setErrorMessage(err.message || "Network connection error. Please try again.");
+      console.error("[LOGIN] Network error:", err);
+      setErrorMessage("Network connection error. Please try again.");
     }
   };
 
@@ -214,7 +252,18 @@ export default function LandingPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const data = await resp.json();
+
+      let data;
+      try {
+        data = await resp.json();
+      } catch (parseErr) {
+        console.error(`[SIGNUP] Failed to parse JSON from /api/session/signup. Status: ${resp.status}`);
+        const text = await resp.text();
+        console.error(`[SIGNUP] Raw response: ${text}`);
+        setErrorMessage("A server error occurred (invalid response during signup).");
+        return;
+      }
+
       if (resp.ok) {
         setSuccessMessage("Account created successfully! Auto-launching secure workflow dashboard...");
         setTimeout(() => {
@@ -223,7 +272,8 @@ export default function LandingPage({
       } else {
         setErrorMessage(data.error || "Failed to create account profile.");
       }
-    } catch {
+    } catch (err: any) {
+      console.error("[SIGNUP] Network error:", err);
       setErrorMessage("Production API request failed.");
     }
   };

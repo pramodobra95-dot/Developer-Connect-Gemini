@@ -277,18 +277,28 @@ export default function DeveloperDashboard({
           }
         })
       });
-      const data = await resp.json();
-      if (data.optimizedHeadline && data.optimizedBio) {
-        setHeadline(data.optimizedHeadline);
-        setBio(data.optimizedBio);
-        if (data.suggestedSkillsToLearn?.length > 0) {
-          setSkillsStr(prev => {
-            const list = prev ? prev.split(",").map(x => x.trim()) : [];
-            const merged = Array.from(new Set([...list, ...data.suggestedSkillsToLearn]));
-            return merged.join(", ");
-          });
+      if (resp.ok) {
+        let data;
+        try {
+          data = await resp.json();
+        } catch (parseErr) {
+          console.error("[DEVELOPER] AI optimization JSON parse error");
+          return;
         }
-        alert("Gemini successfully optimized your headline & bio summary!");
+        if (data && data.optimizedHeadline && data.optimizedBio) {
+          setHeadline(data.optimizedHeadline);
+          setBio(data.optimizedBio);
+          if (data.suggestedSkillsToLearn?.length > 0) {
+            setSkillsStr(prev => {
+              const list = prev ? prev.split(",").map(x => x.trim()) : [];
+              const merged = Array.from(new Set([...list, ...data.suggestedSkillsToLearn]));
+              return merged.join(", ");
+            });
+          }
+          alert("Gemini successfully optimized your headline & bio summary!");
+        }
+      } else {
+        console.error(`[DEVELOPER] AI optimization failed with status ${resp.status}`);
       }
     } catch (e) {
       console.error(e);
@@ -315,13 +325,23 @@ export default function DeveloperDashboard({
           }
         })
       });
-      const data = await resp.json();
-      if (data.title && data.pitch) {
-        setAiProposalText({
-          title: data.title,
-          pitch: data.pitch
-        });
-        setApplyCover(data.pitch);
+      if (resp.ok) {
+        let data;
+        try {
+          data = await resp.json();
+        } catch (parseErr) {
+          console.error("[DEVELOPER] AI proposal JSON parse error");
+          return;
+        }
+        if (data && data.title && data.pitch) {
+          setAiProposalText({
+            title: data.title,
+            pitch: data.pitch
+          });
+          setApplyCover(data.pitch);
+        }
+      } else {
+        console.error(`[DEVELOPER] AI proposal failed with status ${resp.status}`);
       }
     } catch (e) {
       console.error(e);

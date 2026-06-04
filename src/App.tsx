@@ -88,17 +88,34 @@ export default function App() {
   // Fetch full data suite from backend
   const fetchData = async () => {
     try {
+      const safeJson = async (resp: Response, url: string) => {
+        if (!resp.ok) {
+          console.error(`[API ERROR] ${url} returned status ${resp.status}`);
+          return null;
+        }
+        try {
+          return await resp.json();
+        } catch (e) {
+          console.error(`[PARSE ERROR] Failed to parse JSON from ${url}`);
+          const text = await resp.text();
+          console.error(`[RAW RESPONSE] ${text}`);
+          return null;
+        }
+      };
+
       // Load Supabase Status in parallel
       fetch("/api/supabase/status")
-        .then(r => r.json())
-        .then(data => setSupabaseStatus(data))
+        .then(r => safeJson(r, "/api/supabase/status"))
+        .then(data => data && setSupabaseStatus(data))
         .catch(err => console.error("Could not fetch database metrics", err));
 
       const sessionResp = await fetch("/api/session");
-      const sessionData = await sessionResp.json();
-      setCurrentUser(sessionData.user);
-      setDevProfile(sessionData.devProfile);
-      setRecProfile(sessionData.recProfile);
+      const sessionData = await safeJson(sessionResp, "/api/session");
+      if (sessionData) {
+        setCurrentUser(sessionData.user);
+        setDevProfile(sessionData.devProfile);
+        setRecProfile(sessionData.recProfile);
+      }
 
       const [
         projResp, 
@@ -126,34 +143,57 @@ export default function App() {
         fetch("/api/reviews")
       ]);
 
-      setProjects(await projResp.json());
-      setApplications(await appResp.json());
-      setInvites(await invResp.json());
-      setContactRequests(await conResp.json());
-      setProjectStages(await stagesResp.json());
-      setNdas(await ndasResp.json());
-      setReviews(await reviewsResp.json());
-      
-      const chatsData = await chatsResp.json();
-      setChats(chatsData);
+      const projectsData = await safeJson(projResp, "/api/projects");
+      if (projectsData) setProjects(projectsData);
 
-      // Fetch message logs for all chats dynamically
-      if (chatsData.length > 0) {
-        const msgsPromises = chatsData.map((c: Chat) => fetch(`/api/messages/${c.id}`));
-        const msgsResponses = await Promise.all(msgsPromises);
-        let allMsgs: Message[] = [];
-        for (const r of msgsResponses) {
-          const mList = await r.json();
-          allMsgs = [...allMsgs, ...mList];
+      const applicationsData = await safeJson(appResp, "/api/applications");
+      if (applicationsData) setApplications(applicationsData);
+
+      const invitesData = await safeJson(invResp, "/api/invites");
+      if (invitesData) setInvites(invitesData);
+
+      const contactRequestsData = await safeJson(conResp, "/api/contacts");
+      if (contactRequestsData) setContactRequests(contactRequestsData);
+
+      const projectStagesData = await safeJson(stagesResp, "/api/project-stages");
+      if (projectStagesData) setProjectStages(projectStagesData);
+
+      const ndasData = await safeJson(ndasResp, "/api/ndas");
+      if (ndasData) setNdas(ndasData);
+
+      const reviewsData = await safeJson(reviewsResp, "/api/reviews");
+      if (reviewsData) setReviews(reviewsData);
+      
+      const chatsData = await safeJson(chatsResp, "/api/chats");
+      if (chatsData) {
+        setChats(chatsData);
+
+        // Fetch message logs for all chats dynamically
+        if (chatsData.length > 0) {
+          const msgsPromises = chatsData.map((c: Chat) => fetch(`/api/messages/${c.id}`));
+          const msgsResponses = await Promise.all(msgsPromises);
+          let allMsgs: Message[] = [];
+          for (let i = 0; i < msgsResponses.length; i++) {
+            const mList = await safeJson(msgsResponses[i], `/api/messages/${chatsData[i].id}`);
+            if (mList) {
+              allMsgs = [...allMsgs, ...mList];
+            }
+          }
+          setMessages(allMsgs);
+        } else {
+          setMessages([]);
         }
-        setMessages(allMsgs);
-      } else {
-        setMessages([]);
       }
 
-      setAllUsers(await usersResp.json());
-      setDisputes(await dispResp.json());
-      setNotifications(await notifResp.json());
+      const usersData = await safeJson(usersResp, "/api/users");
+      if (usersData) setAllUsers(usersData);
+
+      const disputesData = await safeJson(dispResp, "/api/disputes");
+      if (disputesData) setDisputes(disputesData);
+
+      const notificationsData = await safeJson(notifResp, "/api/notifications");
+      if (notificationsData) setNotifications(notificationsData);
+
       setIsLoading(false);
     } catch (e) {
       console.error("Error loading secure session records", e);
@@ -283,17 +323,36 @@ export default function App() {
   };
 
   const handleQuickHire = async (projectId: string, developerId: string, proposedRate: number, timelineEstimate: string) => {
-    const resp = await fetch("/api/projects/quick-hire", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, developerId, proposedRate, timelineEstimate })
-    });
-    const parsed = await resp.json();
-    await fetchData();
-    if (parsed?.chat?.id) {
-      setSelectedChatId(parsed.chat.id);
+    try {
+      const resp = await fetch("/api/projects/quick-hire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, developerId, proposedRate, timelineEstimate })
+      });
+
+      if (!resp.ok) {
+        console.error(`[QUICK HIRE] Failed with status ${resp.status}`);
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = await resp.json();
+      } catch (e) {
+        console.error("[QUICK HIRE] JSON parse error");
+        const text = await resp.text();
+        console.error(`[QUICK HIRE] Raw response: ${text}`);
+        return;
+      }
+
+      await fetchData();
+      if (parsed?.chat?.id) {
+        setSelectedChatId(parsed.chat.id);
+      }
+      setActiveTab("chats");
+    } catch (err) {
+      console.error("[QUICK HIRE] Network error:", err);
     }
-    setActiveTab("chats");
   };
 
   const handleApplyToProject = async (projectId: string, cover: string, proposedRate: number, avail: string, timeline: string) => {
@@ -357,17 +416,36 @@ export default function App() {
   };
 
   const handleInitiateChat = async (recruId: string, devId: string) => {
-    const resp = await fetch("/api/chats/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recruiterId: recruId, developerId: devId })
-    });
-    const chatData = await resp.json();
-    await fetchData();
-    if (chatData?.chat?.id) {
-      setSelectedChatId(chatData.chat.id);
+    try {
+      const resp = await fetch("/api/chats/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiterId: recruId, developerId: devId })
+      });
+
+      if (!resp.ok) {
+        console.error(`[INITIATE CHAT] Failed with status ${resp.status}`);
+        return;
+      }
+
+      let chatData;
+      try {
+        chatData = await resp.json();
+      } catch (e) {
+        console.error("[INITIATE CHAT] JSON parse error");
+        const text = await resp.text();
+        console.error(`[INITIATE CHAT] Raw response: ${text}`);
+        return;
+      }
+
+      await fetchData();
+      if (chatData?.chat?.id) {
+        setSelectedChatId(chatData.chat.id);
+      }
+      setActiveTab("chats");
+    } catch (err) {
+      console.error("[INITIATE CHAT] Network error:", err);
     }
-    setActiveTab("chats");
   };
 
   const handleSendContactRequest = async (developerId: string) => {

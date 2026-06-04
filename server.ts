@@ -584,86 +584,116 @@ export async function setupApp(app: express.Express) {
 
   // Current session routing (Simulated auth switcher)
   app.get("/api/session", (req: any, res) => {
-    if (req.userId === "guest") {
-      return res.json({ user: null, devProfile: null, recProfile: null });
+    try {
+      if (req.userId === "guest") {
+        return res.json({ success: true, user: null, devProfile: null, recProfile: null });
+      }
+      const user = users.find(u => u.id === req.userId);
+      if (!user) {
+        return res.json({ success: true, user: null, devProfile: null, recProfile: null });
+      }
+      const devProfile = developerProfiles[user.id] || null;
+      const recProfile = recruiterProfiles[user.id] || null;
+      return res.json({ success: true, user, devProfile, recProfile });
+    } catch (err: any) {
+      console.error("[SESSION] Critical error:", err);
+      return res.status(500).json({ success: false, error: "A server error occurred while fetching session." });
     }
-    const user = users.find(u => u.id === req.userId);
-    if (!user) {
-      return res.json({ user: null, devProfile: null, recProfile: null });
-    }
-    const devProfile = developerProfiles[user.id] || null;
-    const recProfile = recruiterProfiles[user.id] || null;
-    res.json({ user, devProfile, recProfile });
   });
 
   app.post("/api/session/login", (req, res) => {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required." });
-    }
-    const targetEmail = email.toLowerCase().trim();
-    
-    // Find matching user by email
-    const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
-    if (user) {
-      if (user.role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
-        return res.status(403).json({ error: "Access Denied. Only info.bouuz@gmail.com can log in with administrator privileges." });
+    try {
+      const { email } = req.body;
+      console.log(`[LOGIN] Attempt for email: ${email}`);
+      if (!email) {
+        console.warn("[LOGIN] Missing email in request body");
+        return res.status(400).json({ success: false, error: "Email is required." });
       }
-      if (user.isSuspended) {
-        return res.status(403).json({ error: "This account has been suspended by administration." });
+      const targetEmail = email.toLowerCase().trim();
+
+      // Find matching user by email
+      const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+      if (user) {
+        if (user.role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
+          console.warn(`[LOGIN] Forbidden admin access attempt for ${targetEmail}`);
+          return res.status(403).json({ success: false, error: "Access Denied. Only info.bouuz@gmail.com can log in with administrator privileges." });
+        }
+        if (user.isSuspended) {
+          console.warn(`[LOGIN] Suspended account attempt: ${targetEmail}`);
+          return res.status(403).json({ success: false, error: "This account has been suspended by administration." });
+        }
+        console.log(`[LOGIN] Success for ${targetEmail}, userId: ${user.id}`);
+        res.setHeader('Set-Cookie', `userId=${user.id}; Path=/; HttpOnly; SameSite=Strict`);
+        const devProfile = developerProfiles[user.id] || null;
+        const recProfile = recruiterProfiles[user.id] || null;
+        return res.json({ success: true, user, devProfile, recProfile });
+      } else {
+        console.warn(`[LOGIN] User not found: ${targetEmail}`);
+        return res.status(401).json({ success: false, error: "Invalid credentials. If you are registering a new user, please use the Signup tab." });
       }
-      res.setHeader('Set-Cookie', `userId=${user.id}; Path=/; HttpOnly; SameSite=Strict`);
-      const devProfile = developerProfiles[user.id] || null;
-      const recProfile = recruiterProfiles[user.id] || null;
-      res.json({ success: true, user, devProfile, recProfile });
-    } else {
-      res.status(401).json({ error: "Invalid credentials. If you are registering a new user, please use the Signup tab." });
+    } catch (err: any) {
+      console.error("[LOGIN] Critical error:", err);
+      return res.status(500).json({ success: false, error: "A server error occurred during login. Please try again." });
     }
   });
 
   app.post("/api/session/logout", (req, res) => {
+    console.log(`[LOGOUT] User: ${req.userId}`);
     res.setHeader('Set-Cookie', `userId=guest; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
-    res.json({ success: true });
+    return res.json({ success: true });
   });
 
   app.post("/api/session/signup", async (req, res) => {
-    const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required." });
-    }
-    const targetEmail = email.toLowerCase().trim();
+    try {
+      const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
+      console.log(`[SIGNUP] Attempt for email: ${email}, role: ${role}`);
 
-    // Check if they tried to register as ADMIN but are not info.bouuz@gmail.com
-    if (role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
-      return res.status(403).json({ error: "Unauthorized role assignment. Only info.bouuz@gmail.com can be registered as an Administrator." });
-    }
-
-    // Check if email already exists
-    const existing = users.find(u => u.email.toLowerCase().trim() === targetEmail);
-    if (existing) {
-      return res.status(400).json({ error: "Email already registered. Please login instead." });
-    }
-
-    let id = "user-" + Math.random().toString(36).substring(2, 9);
-    
-    // If Supabase is active, register in Supabase Auth first
-    if (isSupabaseConfigured()) {
-      try {
-        console.log(`[SUPABASE SIGNUP] Syncing registration of ${targetEmail} directly with Supabase Auth...`);
-        const nameParam = role === "DEVELOPER" ? (fullName || "Candidate") : (fullName || "Representative");
-        const companyParam = companyName || "Startup Solutions Ltd";
-        const sbUser = await dbAuthSignUp(targetEmail, role, nameParam, companyParam);
-        if (sbUser && sbUser.id) {
-          id = sbUser.id; // Override id with real Supabase uuid
-          console.log(`🟢 [SUPABASE SIGNUP] Overrode local ID with real Supabase UUID: ${id}`);
-        }
-      } catch (sbErr: any) {
-        console.error("🔴 Supabase Auth signup failed:", sbErr?.message || sbErr);
-        return res.status(400).json({ 
-          error: `Supabase authentication registration failed: ${sbErr?.message || "Verify your connection or user quota rules."}` 
-        });
+      if (!email) {
+        console.warn("[SIGNUP] Missing email");
+        return res.status(400).json({ success: false, error: "Email is required." });
       }
-    }
+      const targetEmail = email.toLowerCase().trim();
+
+      // Check if they tried to register as ADMIN but are not info.bouuz@gmail.com
+      if (role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
+        console.warn(`[SIGNUP] Forbidden admin role assignment for ${targetEmail}`);
+        return res.status(403).json({ success: false, error: "Unauthorized role assignment. Only info.bouuz@gmail.com can be registered as an Administrator." });
+      }
+
+      // Check if email already exists
+      const existing = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+      if (existing) {
+        console.warn(`[SIGNUP] Email already registered: ${targetEmail}`);
+        return res.status(400).json({ success: false, error: "Email already registered. Please login instead." });
+      }
+
+      let id = "user-" + Math.random().toString(36).substring(2, 9);
+
+      // If Supabase is active, register in Supabase Auth first
+      if (isSupabaseConfigured()) {
+        try {
+        console.log(`[SUPABASE SIGNUP] Checking connectivity...`);
+        const client = getSupabaseClient();
+        if (!client) {
+           throw new Error("Supabase client not initialized correctly.");
+        }
+
+          console.log(`[SUPABASE SIGNUP] Syncing registration of ${targetEmail} directly with Supabase Auth...`);
+          const nameParam = role === "DEVELOPER" ? (fullName || "Candidate") : (fullName || "Representative");
+          const companyParam = companyName || "Startup Solutions Ltd";
+          const sbUser = await dbAuthSignUp(targetEmail, role, nameParam, companyParam);
+          if (sbUser && sbUser.id) {
+            id = sbUser.id; // Override id with real Supabase uuid
+            console.log(`🟢 [SUPABASE SIGNUP] Overrode local ID with real Supabase UUID: ${id}`);
+          }
+        } catch (sbErr: any) {
+          console.error("🔴 Supabase Auth signup failed:", sbErr?.message || sbErr);
+          return res.status(400).json({
+            success: false,
+            error: `Supabase authentication registration failed: ${sbErr?.message || "Verify your connection or user quota rules."}`
+          });
+        }
+      }
 
     const newUser = { 
       id, 
@@ -718,22 +748,34 @@ export async function setupApp(app: express.Express) {
 
     res.setHeader('Set-Cookie', `userId=${id}; Path=/; HttpOnly; SameSite=Strict`);
     addAdminNotification("New User Registered", `${fullName || companyName || "New user"} signed up as a new ${role}.`);
-    res.json({ 
+    console.log(`[SIGNUP] Success for ${targetEmail}, userId: ${id}`);
+    return res.json({
       success: true, 
       user: newUser, 
       devProfile: developerProfiles[id] || null, 
       recProfile: recruiterProfiles[id] || null 
     });
+    } catch (err: any) {
+      console.error("[SIGNUP] Critical error:", err);
+      return res.status(500).json({ success: false, error: "A server error occurred during signup. Please try again." });
+    }
   });
 
   app.post("/api/session/switch", (req, res) => {
-    const { userId } = req.body;
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      res.setHeader('Set-Cookie', `userId=${userId}; Path=/; HttpOnly; SameSite=Strict`);
-      res.json({ success: true, user });
-    } else {
-      res.status(404).json({ error: "User not found" });
+    try {
+      const { userId } = req.body;
+      console.log(`[SWITCH] Switching to userId: ${userId}`);
+      const user = users.find(u => u.id === userId);
+      if (user) {
+        res.setHeader('Set-Cookie', `userId=${userId}; Path=/; HttpOnly; SameSite=Strict`);
+        return res.json({ success: true, user });
+      } else {
+        console.warn(`[SWITCH] User not found: ${userId}`);
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+    } catch (err: any) {
+      console.error("[SWITCH] Critical error:", err);
+      return res.status(500).json({ success: false, error: "A server error occurred during session switch." });
     }
   });
 
