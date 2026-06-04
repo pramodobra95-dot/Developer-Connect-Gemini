@@ -182,8 +182,8 @@ export default function LandingPage({
           setErrorMessage(data.error || "An error occurred during verification.");
         }
       }
-    } catch {
-      setErrorMessage("Network connection timed out. Production database unavailable.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Network connection error. Please try again.");
     }
   };
 

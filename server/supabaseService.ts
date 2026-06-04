@@ -173,6 +173,8 @@ CREATE TABLE IF NOT EXISTS disputes (
   proposed_resolution TEXT,
   status TEXT,
   mediator_id TEXT,
+  verdict_rationale TEXT,
+  split_ratio JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
@@ -209,6 +211,17 @@ CREATE TABLE IF NOT EXISTS notifications (
   description TEXT,
   type TEXT,
   is_read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id TEXT PRIMARY KEY,
+  project_id TEXT,
+  reviewer_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  reviewer_name TEXT,
+  reviewee_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  rating NUMERIC,
+  comment TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -1038,6 +1051,8 @@ export async function dbGetDisputes(fallback: any[]): Promise<any[]> {
       proposedResolution: d.proposed_resolution,
       status: d.status,
       mediatorId: d.mediator_id,
+      verdictRationale: d.verdict_rationale,
+      splitRatio: typeof d.split_ratio === "string" ? JSON.parse(d.split_ratio) : d.split_ratio,
       createdAt: d.created_at,
       updatedAt: d.updated_at
     }));
@@ -1062,6 +1077,8 @@ export async function dbSaveDispute(dispute: any): Promise<boolean> {
       proposed_resolution: dispute.proposedResolution,
       status: dispute.status,
       mediator_id: dispute.mediatorId,
+      verdict_rationale: dispute.verdictRationale,
+      split_ratio: dispute.splitRatio,
       created_at: dispute.createdAt,
       updated_at: dispute.updatedAt
     };
