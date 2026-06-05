@@ -3,15 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-
-declare global {
-  namespace Express {
-    interface Request {
-      userId: string;
-    }
-  }
-}
-
 import dotenv from "dotenv";
 import { 
   UserRole, 
@@ -65,9 +56,7 @@ import {
   dbSaveNotification,
   dbGetDisputes,
   dbSaveDispute,
-  dbGetReviews,
-  dbSaveReview,
-  getSupabaseClient
+  dbUploadFile
 } from "./server/supabaseService.js";
 
 dotenv.config();
@@ -92,6 +81,7 @@ if (geminiApiKey) {
 // ----------------------------------------------------
 // Mock Databases
 // ----------------------------------------------------
+let currentUserId = ""; // Default session user empty (no active logged in session)
 
 let users = [
   { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } },
@@ -283,6 +273,9 @@ function addAdminNotification(title: string, desc: string) {
 // ----------------------------------------------------
 // Supabase Replication and Synchronization Logic
 // ----------------------------------------------------
+let lastHydrationTime = 0;
+let ongoingHydrationPromise: Promise<void> | null = null;
+
 async function seedPremiumData() {
   if (!isSupabaseConfigured()) return;
   console.log("🌱 Database is empty. Seeding premium default user base and developer portfolios to Supabase...");
@@ -308,17 +301,23 @@ async function seedPremiumData() {
   }
 }
 
-async function initializeSupabaseSync() {
-  if (isSupabaseConfigured()) {
-    console.log("🔄 Hydrating local in-memory DB tables with Supabase database content...");
-    try {
-      // 0. Reviews
-      const dbRevs = await dbGetReviews([]);
-      if (dbRevs && dbRevs.length > 0) {
-        reviews.length = 0;
-        reviews.push(...dbRevs);
-      }
+async function initializeSupabaseSync(): Promise<void> {
+  if (!isSupabaseConfigured()) return;
 
+  // Promise deduplication: reuse ongoing hydration promise if active
+  if (ongoingHydrationPromise) {
+    return ongoingHydrationPromise;
+  }
+
+  // Cooldown rate-limit: avoid querying Supabase more than once every 15 seconds
+  const COOLDOWN_MS = 15000;
+  if (Date.now() - lastHydrationTime < COOLDOWN_MS) {
+    return;
+  }
+
+  ongoingHydrationPromise = (async () => {
+    console.log("🔄 Hydrating local in-memory DB tables with Supabase database content (throttled)...");
+    try {
       // 1. Users
       const dbUsers = await dbGetUsers([]);
       if (dbUsers && dbUsers.length > 0) {
@@ -422,20 +421,16 @@ async function initializeSupabaseSync() {
         contactAccessRequests.push(...dbCons);
       }
 
+      lastHydrationTime = Date.now();
       console.log("✨ Supabase in-memory sync hydration completed successfully.");
     } catch (err) {
       console.error("🔴 Supabase in-memory sync hydration failed partially (usually due to unseeded schema tables):", err);
+    } finally {
+      ongoingHydrationPromise = null;
     }
-  }
-}
-async function syncReview(review: any) {
-  if (isSupabaseConfigured()) {
-    try {
-      await dbSaveReview(review);
-    } catch (e) {
-      console.error("Sync review fail", e);
-    }
-  }
+  })();
+
+  return ongoingHydrationPromise;
 }
 
 // Background Replication Triggers
@@ -560,31 +555,28 @@ async function syncDispute(disp: any) {
 // ----------------------------------------------------
 // Express Setup
 // ----------------------------------------------------
-export const app = express();
-
-// Hydrate Supabase on Server Startup (non-blocking for container health compliance)
-initializeSupabaseSync().catch(err => {
-  console.error("🔴 Failed to perform initial Supabase hydration checks:", err);
-});
-
-app.use(express.json());
-
-// Configure all routes and middleware on the app instance
-export async function setupApp(app: express.Express) {
+async function startServer() {
+  const app = express();
   const PORT = 3000;
 
-  // Simple Session Middleware
-  app.use((req: any, res, next) => {
-    const cookies = req.headers.cookie || "";
-    const match = cookies.match(/userId=([^;]+)/);
-    req.userId = match ? match[1] : "guest";
-    next();
+  // Hydrate Supabase on Server Startup (non-blocking for container health compliance)
+  initializeSupabaseSync().catch(err => {
+    console.error("🔴 Failed to perform initial Supabase hydration checks:", err);
   });
 
+  app.use(express.json());
+
   // Real-time Supabase request hydration middleware
-  // Optimized: Removed full hydration on every request to prevent timeouts.
-  // Full hydration is performed only on server startup.
-  app.use("/api", async (req: any, res, next) => {
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/supabase/status" || req.path === "/session/logout") {
+      return next();
+    }
+    if (isSupabaseConfigured()) {
+      // Trigger hydration in background without blocking current request thread
+      initializeSupabaseSync().catch(err => {
+        console.error("🔴 Supabase live request middleware hydration failed:", err);
+      });
+    }
     next();
   });
 
@@ -593,117 +585,87 @@ export async function setupApp(app: express.Express) {
   // ----------------------------------------------------
 
   // Current session routing (Simulated auth switcher)
-  app.get("/api/session", (req: any, res) => {
-    try {
-      if (req.userId === "guest") {
-        return res.json({ success: true, user: null, devProfile: null, recProfile: null });
-      }
-      const user = users.find(u => u.id === req.userId);
-      if (!user) {
-        return res.json({ success: true, user: null, devProfile: null, recProfile: null });
-      }
-      const devProfile = developerProfiles[user.id] || null;
-      const recProfile = recruiterProfiles[user.id] || null;
-      return res.json({ success: true, user, devProfile, recProfile });
-    } catch (err: any) {
-      console.error("[SESSION] Critical error:", err);
-      return res.status(500).json({ success: false, error: "A server error occurred while fetching session." });
+  app.get("/api/session", (req, res) => {
+    if (currentUserId === "guest") {
+      return res.json({ user: null, devProfile: null, recProfile: null });
     }
+    const user = users.find(u => u.id === currentUserId);
+    if (!user) {
+      return res.json({ user: null, devProfile: null, recProfile: null });
+    }
+    const devProfile = developerProfiles[user.id] || null;
+    const recProfile = recruiterProfiles[user.id] || null;
+    res.json({ user, devProfile, recProfile });
   });
 
   app.post("/api/session/login", (req, res) => {
-    try {
-      const { email } = req.body;
-      console.log(`[LOGIN] Attempt for email: ${email}`);
-      if (!email) {
-        console.warn("[LOGIN] Missing email in request body");
-        return res.status(400).json({ success: false, error: "Email is required." });
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
+    
+    // Find matching user by email
+    const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+    if (user) {
+      if (user.role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
+        return res.status(403).json({ error: "Access Denied. Only info.bouuz@gmail.com can log in with administrator privileges." });
       }
-      const targetEmail = email.toLowerCase().trim();
-
-      // Find matching user by email
-      const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
-      if (user) {
-        if (user.role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
-          console.warn(`[LOGIN] Forbidden admin access attempt for ${targetEmail}`);
-          return res.status(403).json({ success: false, error: "Access Denied. Only info.bouuz@gmail.com can log in with administrator privileges." });
-        }
-        if (user.isSuspended) {
-          console.warn(`[LOGIN] Suspended account attempt: ${targetEmail}`);
-          return res.status(403).json({ success: false, error: "This account has been suspended by administration." });
-        }
-        console.log(`[LOGIN] Success for ${targetEmail}, userId: ${user.id}`);
-        res.setHeader('Set-Cookie', `userId=${user.id}; Path=/; HttpOnly; SameSite=Strict`);
-        const devProfile = developerProfiles[user.id] || null;
-        const recProfile = recruiterProfiles[user.id] || null;
-        return res.json({ success: true, user, devProfile, recProfile });
-      } else {
-        console.warn(`[LOGIN] User not found: ${targetEmail}`);
-        return res.status(401).json({ success: false, error: "Invalid credentials. If you are registering a new user, please use the Signup tab." });
+      if (user.isSuspended) {
+        return res.status(403).json({ error: "This account has been suspended by administration." });
       }
-    } catch (err: any) {
-      console.error("[LOGIN] Critical error:", err);
-      return res.status(500).json({ success: false, error: "A server error occurred during login. Please try again." });
+      currentUserId = user.id;
+      const devProfile = developerProfiles[user.id] || null;
+      const recProfile = recruiterProfiles[user.id] || null;
+      res.json({ success: true, user, devProfile, recProfile });
+    } else {
+      res.status(401).json({ error: "Invalid credentials. If you are registering a new user, please use the Signup tab." });
     }
   });
 
   app.post("/api/session/logout", (req, res) => {
-    console.log(`[LOGOUT] User: ${req.userId}`);
-    res.setHeader('Set-Cookie', `userId=guest; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
-    return res.json({ success: true });
+    currentUserId = "guest";
+    res.json({ success: true });
   });
 
   app.post("/api/session/signup", async (req, res) => {
-    try {
-      const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
-      console.log(`[SIGNUP] Attempt for email: ${email}, role: ${role}`);
+    const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email is required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
 
-      if (!email) {
-        console.warn("[SIGNUP] Missing email");
-        return res.status(400).json({ success: false, error: "Email is required." });
-      }
-      const targetEmail = email.toLowerCase().trim();
+    // Check if they tried to register as ADMIN but are not info.bouuz@gmail.com
+    if (role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
+      return res.status(403).json({ error: "Unauthorized role assignment. Only info.bouuz@gmail.com can be registered as an Administrator." });
+    }
 
-      // Check if they tried to register as ADMIN but are not info.bouuz@gmail.com
-      if (role === UserRole.ADMIN && targetEmail !== "info.bouuz@gmail.com") {
-        console.warn(`[SIGNUP] Forbidden admin role assignment for ${targetEmail}`);
-        return res.status(403).json({ success: false, error: "Unauthorized role assignment. Only info.bouuz@gmail.com can be registered as an Administrator." });
-      }
+    // Check if email already exists
+    const existing = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+    if (existing) {
+      return res.status(400).json({ error: "Email already registered. Please login instead." });
+    }
 
-      // Check if email already exists
-      const existing = users.find(u => u.email.toLowerCase().trim() === targetEmail);
-      if (existing) {
-        console.warn(`[SIGNUP] Email already registered: ${targetEmail}`);
-        return res.status(400).json({ success: false, error: "Email already registered. Please login instead." });
-      }
-
-      let id = "user-" + Math.random().toString(36).substring(2, 9);
-
-      // If Supabase is active, register in Supabase Auth first
-      if (isSupabaseConfigured()) {
-        try {
-        console.log(`[SUPABASE SIGNUP] Checking connectivity...`);
-        const client = getSupabaseClient();
-        if (!client) {
-           throw new Error("Supabase client not initialized correctly.");
+    let id = "user-" + Math.random().toString(36).substring(2, 9);
+    
+    // If Supabase is active, register in Supabase Auth first
+    if (isSupabaseConfigured()) {
+      try {
+        console.log(`[SUPABASE SIGNUP] Syncing registration of ${targetEmail} directly with Supabase Auth...`);
+        const nameParam = role === "DEVELOPER" ? (fullName || "Candidate") : (fullName || "Representative");
+        const companyParam = companyName || "Startup Solutions Ltd";
+        const sbUser = await dbAuthSignUp(targetEmail, role, nameParam, companyParam);
+        if (sbUser && sbUser.id) {
+          id = sbUser.id; // Override id with real Supabase uuid
+          console.log(`🟢 [SUPABASE SIGNUP] Overrode local ID with real Supabase UUID: ${id}`);
         }
-
-          console.log(`[SUPABASE SIGNUP] Syncing registration of ${targetEmail} directly with Supabase Auth...`);
-          const nameParam = role === "DEVELOPER" ? (fullName || "Candidate") : (fullName || "Representative");
-          const companyParam = companyName || "Startup Solutions Ltd";
-          const sbUser = await dbAuthSignUp(targetEmail, role, nameParam, companyParam);
-          if (sbUser && sbUser.id) {
-            id = sbUser.id; // Override id with real Supabase uuid
-            console.log(`🟢 [SUPABASE SIGNUP] Overrode local ID with real Supabase UUID: ${id}`);
-          }
-        } catch (sbErr: any) {
-          console.error("🔴 Supabase Auth signup failed:", sbErr?.message || sbErr);
-          return res.status(400).json({
-            success: false,
-            error: `Supabase authentication registration failed: ${sbErr?.message || "Verify your connection or user quota rules."}`
-          });
-        }
+      } catch (sbErr: any) {
+        console.error("🔴 Supabase Auth signup failed:", sbErr?.message || sbErr);
+        return res.status(400).json({ 
+          error: `Supabase authentication registration failed: ${sbErr?.message || "Verify your connection or user quota rules."}` 
+        });
       }
+    }
 
     const newUser = { 
       id, 
@@ -756,48 +718,34 @@ export async function setupApp(app: express.Express) {
       await syncUser(newUser);
     }
 
-    res.setHeader('Set-Cookie', `userId=${id}; Path=/; HttpOnly; SameSite=Strict`);
+    currentUserId = id;
     addAdminNotification("New User Registered", `${fullName || companyName || "New user"} signed up as a new ${role}.`);
-    console.log(`[SIGNUP] Success for ${targetEmail}, userId: ${id}`);
-    return res.json({
+    res.json({ 
       success: true, 
       user: newUser, 
       devProfile: developerProfiles[id] || null, 
       recProfile: recruiterProfiles[id] || null 
     });
-    } catch (err: any) {
-      console.error("[SIGNUP] Critical error:", err);
-      return res.status(500).json({ success: false, error: "A server error occurred during signup. Please try again." });
-    }
   });
 
   app.post("/api/session/switch", (req, res) => {
-    try {
-      const { userId } = req.body;
-      console.log(`[SWITCH] Switching to userId: ${userId}`);
-      const user = users.find(u => u.id === userId);
-      if (user) {
-        res.setHeader('Set-Cookie', `userId=${userId}; Path=/; HttpOnly; SameSite=Strict`);
-        return res.json({ success: true, user });
-      } else {
-        console.warn(`[SWITCH] User not found: ${userId}`);
-        return res.status(404).json({ success: false, error: "User not found" });
-      }
-    } catch (err: any) {
-      console.error("[SWITCH] Critical error:", err);
-      return res.status(500).json({ success: false, error: "A server error occurred during session switch." });
+    const { userId } = req.body;
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      currentUserId = userId;
+      res.json({ success: true, user });
+    } else {
+      res.status(404).json({ error: "User not found" });
     }
   });
 
   // Users endpoint (useful for Admin list)
-  app.get("/api/users", async (req, res) => {
+  app.get("/api/users", (req, res) => {
     if (isSupabaseConfigured()) {
-      try {
-        console.log("[DYNAMIC GET USERS] Triggering Supabase dynamic rehydration sync for real-time dashboard data...");
-        await initializeSupabaseSync();
-      } catch (syncErr: any) {
+      // Trigger background dynamic rehydration sync for real-time dashboard data without awaiting
+      initializeSupabaseSync().catch(syncErr => {
         console.error("⚠️ [DYNAMIC GET USERS] Supabase sync error:", syncErr?.message || syncErr);
-      }
+      });
     }
     const combined = users.map(user => {
       return {
@@ -806,7 +754,7 @@ export async function setupApp(app: express.Express) {
         recProfile: recruiterProfiles[user.id] || null
       };
     });
-    res.json({ success: true, users: combined });
+    res.json(combined);
   });
 
   app.post("/api/users/update", async (req, res) => {
@@ -817,7 +765,7 @@ export async function setupApp(app: express.Express) {
       if (typeof isSuspended === "boolean") users[userIndex].isSuspended = isSuspended;
       if (role) {
         if (role === UserRole.ADMIN && users[userIndex].email.toLowerCase().trim() !== "info.bouuz@gmail.com") {
-          return res.status(403).json({ success: false, error: "Only info.bouuz@gmail.com is authorized to hold the Administrator role." });
+          return res.status(403).json({ error: "Only info.bouuz@gmail.com is authorized to hold the Administrator role." });
         }
         users[userIndex].role = role;
         
@@ -863,15 +811,15 @@ export async function setupApp(app: express.Express) {
       await syncUser(users[userIndex]);
       res.json({ success: true, user: users[userIndex] });
     } else {
-      res.status(404).json({ success: false, error: "User not found" });
+      res.status(404).json({ error: "User not found" });
     }
   });
 
-  app.post("/api/users/preferences", async (req: any, res) => {
-    if (req.userId === "guest") {
-      return res.status(401).json({ success: false, error: "Unauthenticated" });
+  app.post("/api/users/preferences", async (req, res) => {
+    if (currentUserId === "guest") {
+      return res.status(401).json({ error: "Unauthenticated" });
     }
-    const userIndex = users.findIndex(u => u.id === req.userId);
+    const userIndex = users.findIndex(u => u.id === currentUserId);
     if (userIndex !== -1) {
       users[userIndex].notificationPreferences = {
         emailNewInvites: true,
@@ -883,7 +831,7 @@ export async function setupApp(app: express.Express) {
       await syncUser(users[userIndex]);
       res.json({ success: true, user: users[userIndex] });
     } else {
-      res.status(404).json({ success: false, error: "User not found" });
+      res.status(404).json({ error: "User not found" });
     }
   });
 
@@ -945,15 +893,15 @@ export async function setupApp(app: express.Express) {
 
   // Projects endpoint
   app.get("/api/projects", (req, res) => {
-    res.json({ success: true, projects });
+    res.json(projects);
   });
 
-  app.post("/api/projects", (req: any, res) => {
+  app.post("/api/projects", (req, res) => {
     const { title, description, techStack, budget, hiringType, workMode, duration, aiMetrics } = req.body;
     const id = "proj-" + Math.random().toString(36).substring(2, 9);
     const newProject: Project = {
       id,
-      recruiterId: req.userId,
+      recruiterId: currentUserId,
       title,
       description,
       techStack: techStack || ["React", "Node.js"],
@@ -980,7 +928,7 @@ export async function setupApp(app: express.Express) {
       syncProject(proj);
       res.json({ success: true, project: proj });
     } else {
-      res.status(404).json({ success: false, error: "Project not found" });
+      res.status(404).json({ error: "Project not found" });
     }
   });
 
@@ -988,7 +936,7 @@ export async function setupApp(app: express.Express) {
   // PROJECT STAGES & MILESTONES API
   // ----------------------------------------------------
   app.get("/api/project-stages", (req, res) => {
-    res.json({ success: true, projectStages });
+    res.json(projectStages);
   });
 
   app.post("/api/project-stages", (req, res) => {
@@ -1034,7 +982,7 @@ export async function setupApp(app: express.Express) {
       syncProjectStage(stage);
       res.json({ success: true, stage });
     } else {
-      res.status(404).json({ success: false, error: "Stage not found" });
+      res.status(404).json({ error: "Stage not found" });
     }
   });
 
@@ -1046,7 +994,7 @@ export async function setupApp(app: express.Express) {
       syncProjectStage(stage);
       res.json({ success: true, stage });
     } else {
-      res.status(404).json({ success: false, error: "Stage not found" });
+      res.status(404).json({ error: "Stage not found" });
     }
   });
 
@@ -1054,10 +1002,10 @@ export async function setupApp(app: express.Express) {
   // SECURE DIGITAL NDA CONTRACTS API
   // ----------------------------------------------------
   app.get("/api/ndas", (req, res) => {
-    res.json({ success: true, ndas });
+    res.json(ndas);
   });
 
-  app.post("/api/ndas", (req: any, res) => {
+  app.post("/api/ndas", (req, res) => {
     const { projectId, developerId, terms } = req.body;
     const id = "nda-" + Math.random().toString(36).substring(2, 9);
     
@@ -1074,7 +1022,7 @@ export async function setupApp(app: express.Express) {
     }
 
     const proj = projects.find(p => p.id === projectId);
-    const recruiterId = proj ? proj.recruiterId : req.userId;
+    const recruiterId = proj ? proj.recruiterId : currentUserId;
 
     const newNda: NDA = {
       id,
@@ -1116,7 +1064,7 @@ This Non-Disclosure Agreement (the "Agreement") is entered into by and between $
 
     if (!ai) {
       console.warn("Gemini is unconfigured. Returning premium fallback NDA draft.");
-      return res.json({ success: true, terms: fallbackTerms });
+      return res.json({ terms: fallbackTerms });
     }
 
     try {
@@ -1134,10 +1082,10 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       });
 
       const extractedText = response.text || fallbackTerms;
-      res.json({ success: true, terms: extractedText });
+      res.json({ terms: extractedText });
     } catch (err: any) {
       console.error("Gemini NDA generation failed. Falling back to structured schema.", err);
-      res.json({ success: true, terms: fallbackTerms });
+      res.json({ terms: fallbackTerms });
     }
   });
 
@@ -1145,7 +1093,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     const { ndaId, role, signature } = req.body;
     const nda = ndas.find(n => n.id === ndaId);
     if (!nda) {
-      return res.status(404).json({ success: false, error: "NDA not found" });
+      return res.status(404).json({ error: "NDA not found" });
     }
 
     if (role === "RECRUITER") {
@@ -1169,12 +1117,12 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   // ----------------------------------------------------
   // RECRUITER QUICK-HIRE DIRECT ENGAGEMENT API
   // ----------------------------------------------------
-  app.post("/api/projects/quick-hire", (req: any, res) => {
+  app.post("/api/projects/quick-hire", (req, res) => {
     const { projectId, developerId, proposedRate, timelineEstimate, coverLetter } = req.body;
     
     const proj = projects.find(p => p.id === projectId);
     if (!proj) {
-      return res.status(404).json({ success: false, error: "Project not found" });
+      return res.status(404).json({ error: "Project not found" });
     }
 
     proj.status = ProjectStatus.IN_REVIEW;
@@ -1203,12 +1151,12 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     }
 
     // Establish dynamic chats immediately
-    let existingChat = chats.find(c => c.developerId === developerId && c.recruiterId === req.userId);
+    let existingChat = chats.find(c => c.developerId === developerId && c.recruiterId === currentUserId);
     if (!existingChat) {
       existingChat = {
         id: "chat-" + Math.random().toString(36).substring(2, 9),
         developerId,
-        recruiterId: req.userId,
+        recruiterId: currentUserId,
         lastMessageText: "Quick Hire order established. Welcome to the workspace!",
         updatedAt: new Date().toISOString()
       };
@@ -1236,16 +1184,16 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
   // Applications endpoint
   app.get("/api/applications", (req, res) => {
-    res.json({ success: true, applications });
+    res.json(applications);
   });
 
-  app.post("/api/applications", (req: any, res) => {
+  app.post("/api/applications", (req, res) => {
     const { projectId, coverLetter, proposedRate, availability, timelineEstimate } = req.body;
     const id = "app-" + Math.random().toString(36).substring(2, 9);
     const newApp: Application = {
       id,
       projectId,
-      developerId: req.userId,
+      developerId: currentUserId,
       coverLetter,
       proposedRate: Number(proposedRate) || 500,
       availability: availability || "Both",
@@ -1303,45 +1251,45 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
       res.json({ success: true, application: appRecord });
     } else {
-      res.status(404).json({ success: false, error: "Application not found" });
+      res.status(404).json({ error: "Application not found" });
     }
   });
 
   // Profile management endpoint
-  app.post("/api/profile/developer", async (req: any, res) => {
+  app.post("/api/profile/developer", async (req, res) => {
     const profile = req.body;
-    developerProfiles[req.userId] = {
-      ...developerProfiles[req.userId],
+    developerProfiles[currentUserId] = {
+      ...developerProfiles[currentUserId],
       ...profile,
-      userId: req.userId
+      userId: currentUserId
     };
-    await syncDevProfile(req.userId, developerProfiles[req.userId]);
-    res.json({ success: true, profile: developerProfiles[req.userId] });
+    await syncDevProfile(currentUserId, developerProfiles[currentUserId]);
+    res.json({ success: true, profile: developerProfiles[currentUserId] });
   });
 
-  app.post("/api/profile/recruiter", async (req: any, res) => {
+  app.post("/api/profile/recruiter", async (req, res) => {
     const profile = req.body;
-    recruiterProfiles[req.userId] = {
-      ...recruiterProfiles[req.userId],
+    recruiterProfiles[currentUserId] = {
+      ...recruiterProfiles[currentUserId],
       ...profile,
-      userId: req.userId
+      userId: currentUserId
     };
-    await syncRecProfile(req.userId, recruiterProfiles[req.userId]);
-    res.json({ success: true, profile: recruiterProfiles[req.userId] });
+    await syncRecProfile(currentUserId, recruiterProfiles[currentUserId]);
+    res.json({ success: true, profile: recruiterProfiles[currentUserId] });
   });
 
   // Invites endpoint
   app.get("/api/invites", (req, res) => {
-    res.json({ success: true, invites });
+    res.json(invites);
   });
 
-  app.post("/api/invites", (req: any, res) => {
+  app.post("/api/invites", (req, res) => {
     const { projectId, developerId, message } = req.body;
     const id = "inv-" + Math.random().toString(36).substring(2, 9);
     const newInvite: Invite = {
       id,
       projectId,
-      recruiterId: req.userId,
+      recruiterId: currentUserId,
       developerId,
       message: message || "We would love for you to checkout our project!",
       status: InviteStatus.PENDING,
@@ -1372,21 +1320,21 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       syncInvite(inv);
       res.json({ success: true, invite: inv });
     } else {
-      res.status(404).json({ success: false, error: "Invite not found" });
+      res.status(404).json({ error: "Invite not found" });
     }
   });
 
   // Contact requests endpoint
   app.get("/api/contacts", (req, res) => {
-    res.json({ success: true, contactAccessRequests });
+    res.json(contactAccessRequests);
   });
 
-  app.post("/api/contacts/request", (req: any, res) => {
+  app.post("/api/contacts/request", (req, res) => {
     const { developerId } = req.body;
     const id = "con-" + Math.random().toString(36).substring(2, 9);
     const newRequest: ContactAccessRequest = {
       id,
-      recruiterId: req.userId,
+      recruiterId: currentUserId,
       developerId,
       status: "PENDING",
       createdAt: new Date().toISOString()
@@ -1426,32 +1374,39 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       syncContactRequest(reqRecord);
       res.json({ success: true, request: reqRecord });
     } else {
-      res.status(404).json({ success: false, error: "Request not found" });
+      res.status(404).json({ error: "Request not found" });
     }
   });
 
   // Chats & messaging
-  app.get("/api/chats", (req: any, res) => {
+  app.get("/api/chats", (req, res) => {
     // Return chats involving current user
-    const userChats = chats.filter(c => c.developerId === req.userId || c.recruiterId === req.userId);
-    res.json({ success: true, chats: userChats });
+    const userChats = chats.filter(c => c.developerId === currentUserId || c.recruiterId === currentUserId);
+    res.json(userChats);
   });
 
   app.get("/api/messages/:chatId", (req, res) => {
     const chatMessages = messages.filter(m => m.chatId === req.params.chatId);
-    res.json({ success: true, messages: chatMessages });
+    res.json(chatMessages);
   });
 
-  app.post("/api/messages", (req: any, res) => {
+  app.post("/api/messages", async (req, res) => {
     const { chatId, receiverId, text, fileUrl, fileType } = req.body;
+    
+    let processedFileUrl = fileUrl;
+    if (fileUrl && fileUrl.startsWith("data:")) {
+      const defaultFileName = fileType === "image" ? "image.png" : "file.bin";
+      processedFileUrl = await dbUploadFile(fileUrl, defaultFileName);
+    }
+
     const id = "msg-" + Math.random().toString(36).substring(2, 9);
     const newMsg: Message = {
       id,
       chatId,
-      senderId: req.userId,
+      senderId: currentUserId,
       receiverId,
       text,
-      fileUrl,
+      fileUrl: processedFileUrl,
       fileType,
       seen: false,
       createdAt: new Date().toISOString()
@@ -1498,20 +1453,20 @@ The NDA must be detailed, including Clauses for Confidential Information classif
       syncChat(chat);
       res.json({ success: true, chat });
     } else {
-      res.status(404).json({ success: false, error: "Chat thread not found" });
+      res.status(404).json({ error: "Chat thread not found" });
     }
   });
 
   // Gemini suggested actions generator
-  app.get("/api/chats/:chatId/suggested-actions", async (req: any, res) => {
+  app.get("/api/chats/:chatId/suggested-actions", async (req, res) => {
     const { chatId } = req.params;
     const chat = chats.find(c => c.id === chatId);
     if (!chat) {
-      return res.status(404).json({ success: false, error: "Chat not found" });
+      return res.status(404).json({ error: "Chat not found" });
     }
 
     // Determine current user context
-    const isDeveloper = (req.userId === chat.developerId);
+    const isDeveloper = (currentUserId === chat.developerId);
     const roleLabel = isDeveloper ? "Developer" : "Recruiter";
 
     // Gather past messages
@@ -1650,7 +1605,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     };
 
     if (!ai) {
-      return res.json({ success: true, source: "fallback", suggestions: getFallbackSuggestions() });
+      return res.json({ source: "fallback", suggestions: getFallbackSuggestions() });
     }
 
     try {
@@ -1731,29 +1686,29 @@ Instructions:
 
       const parsed = JSON.parse(response.text || "{}");
       if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
-        return res.json({ success: true, source: "gemini", model: usedModel, suggestions: parsed.suggestions });
+        return res.json({ source: "gemini", model: usedModel, suggestions: parsed.suggestions });
       } else {
         throw new Error("Invalid suggestions structure");
       }
     } catch (err: any) {
       console.log("[Prompt Engine] Activating secure local fallback suggestions engine.");
-      return res.json({ success: true, source: "fallback_on_error", suggestions: getFallbackSuggestions() });
+      return res.json({ source: "fallback_on_error", suggestions: getFallbackSuggestions() });
     }
   });
 
   // Disputes & escrow
   app.get("/api/disputes", (req, res) => {
-    res.json({ success: true, disputes });
+    res.json(disputes);
   });
 
-  app.post("/api/disputes", (req: any, res) => {
+  app.post("/api/disputes", (req, res) => {
     const { projectId, milestoneTitle, opponentId, reason, details, escrowAmount, proposedResolution } = req.body;
     const id = "disp-" + Math.random().toString(36).substring(2, 9);
     const newDispute: Dispute = {
       id,
       projectId,
       milestoneTitle,
-      claimantId: req.userId,
+      claimantId: currentUserId,
       opponentId,
       reason,
       details,
@@ -1781,21 +1736,21 @@ Instructions:
       syncDispute(disp);
       res.json({ success: true, dispute: disp });
     } else {
-      res.status(404).json({ success: false, error: "Dispute not found" });
+      res.status(404).json({ error: "Dispute not found" });
     }
   });
 
   // Notifications
-  app.get("/api/notifications", (req: any, res) => {
-    const userNotifications = notifications.filter(n => n.userId === req.userId || (req.userId === "admin" && n.userId === "admin"));
-    res.json({ success: true, notifications: userNotifications });
+  app.get("/api/notifications", (req, res) => {
+    const userNotifications = notifications.filter(n => n.userId === currentUserId || (currentUserId === "admin" && n.userId === "admin"));
+    res.json(userNotifications);
   });
 
-  app.post("/api/notifications/read", (req: any, res) => {
+  app.post("/api/notifications/read", (req, res) => {
     const { notificationId } = req.body;
     if (notificationId === "all") {
       notifications.forEach(n => {
-        if (n.userId === req.userId || (req.userId === "admin" && n.userId === "admin")) {
+        if (n.userId === currentUserId || (currentUserId === "admin" && n.userId === "admin")) {
           n.isRead = true;
           syncNotification(n);
         }
@@ -1808,19 +1763,19 @@ Instructions:
       syncNotification(notif);
       res.json({ success: true });
     } else {
-      res.status(404).json({ success: false, error: "Notification not found" });
+      res.status(404).json({ error: "Notification not found" });
     }
   });
 
   // Reviews APIs
   app.get("/api/reviews", (req, res) => {
-    res.json({ success: true, reviews });
+    res.json(reviews);
   });
 
   app.post("/api/reviews", (req, res) => {
     const { projectId, reviewerId, reviewerName, revieweeId, rating, comment } = req.body;
     if (!reviewerId || !revieweeId || !rating || !comment) {
-      return res.status(400).json({ success: false, error: "Missing required review parameters." });
+      return res.status(400).json({ error: "Missing required review parameters." });
     }
     const newReview: Review = {
       id: "rev-" + Math.random().toString(36).substring(2, 9),
@@ -1833,14 +1788,12 @@ Instructions:
       createdAt: new Date().toISOString()
     };
     reviews.push(newReview);
-    syncReview(newReview);
-    res.json({ success: true, review: newReview });
+    res.json(newReview);
   });
 
   // Supabase connection and status query endpoint (for administrative views or diagnostics panel)
   app.get("/api/supabase/status", (req, res) => {
     res.json({
-      success: true,
       configured: isSupabaseConfigured(),
       endpoint: process.env.SUPABASE_URL || "NOT SET",
       setupSql: SUPABASE_SETUP_SQL,
@@ -1862,49 +1815,6 @@ Instructions:
     });
   });
 
-  app.get("/api/diag/supabase", async (req, res) => {
-    const urlSource = process.env.SUPABASE_URL ? "SUPABASE_URL" : (process.env.NEXT_PUBLIC_SUPABASE_URL ? "NEXT_PUBLIC_SUPABASE_URL" : "None");
-    const keySource = process.env.SUPABASE_ANON_KEY ? "SUPABASE_ANON_KEY" : (process.env.SUPABASE_KEY ? "SUPABASE_KEY" : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "NEXT_PUBLIC_SUPABASE_ANON_KEY" : "None"));
-
-    const configured = isSupabaseConfigured();
-    const supabase = (global as any).getSupabaseClient ? (global as any).getSupabaseClient() : null; // This might be tricky as it's not exported to global. Let's import it if possible or just use what we have.
-
-    // Better way: we already import getSupabaseClient in server.ts (actually we don't, we import from ./server/supabaseService.js)
-    const { getSupabaseClient } = await import("./server/supabaseService.js");
-    const client = getSupabaseClient();
-
-    const tableChecks: Record<string, string> = {};
-    const tables = [
-      'users', 'developer_profiles', 'recruiter_profiles', 'projects',
-      'applications', 'invites', 'chats', 'messages', 'notifications',
-      'disputes', 'project_stages', 'ndas', 'reviews'
-    ];
-
-    if (client) {
-      for (const table of tables) {
-        try {
-          const { error } = await client.from(table).select('*', { count: 'exact', head: true }).limit(1);
-          if (error) {
-            tableChecks[table] = `❌ ${error.message}`;
-          } else {
-            tableChecks[table] = "✅ OK";
-          }
-        } catch (e: any) {
-          tableChecks[table] = `❌ Exception: ${e.message}`;
-        }
-      }
-    }
-
-    res.json({
-      success: true,
-      configured,
-      urlSource,
-      keySource,
-      connectionStatus: configured ? "🟢 Active" : "🔴 Not configured",
-      tableChecks
-    });
-  });
-
   // ----------------------------------------------------
   // GEMINI AI ENDPOINT
   // ----------------------------------------------------
@@ -1917,7 +1827,6 @@ Instructions:
       
       if (type === "project-analysis") {
         return res.json({
-          success: true,
           suggestedTech: ["React", "Node.js", "Docker", "AWS", "PostgreSQL", "Redis"],
           recommendedRoles: ["Senior Backend Engineer", "DevOps Specialist"],
           confidence: 94,
@@ -1925,14 +1834,12 @@ Instructions:
         });
       } else if (type === "profile-optimization") {
         return res.json({
-          success: true,
           optimizedHeadline: "Principal Backend Architect | High-Scale Go & Next.js Microservices",
           optimizedBio: "Elite Full-Stack System Architect with over 8 years experience building highly concurrent transactional infrastructures. Specializes in building sub-100ms AWS microservices with rigorous test compliance, handling peak loads of up to 12,000 requests/minute.",
           suggestedSkillsToLearn: ["Go (Golang)", "Kubernetes (K8s)", "gRPC / Protobuf"]
         });
       } else if (type === "proposal-generation") {
         return res.json({
-          success: true,
           title: "Proposal for Next-Gen E-commerce Backend Architecture",
           pitch: `Hi, I saw your post for the Next-Gen E-commerce Backend Architecture. 
 
@@ -1941,7 +1848,7 @@ With over 8 years of specialized software construction experience, I have succes
 I proposed a structured, milestone-oriented execution approach. Let me know if you would like to hop on a quick video session to align the initial API blueprint specifications.`
         });
       }
-      return res.status(400).json({ success: false, error: "Unsupported analysis type" });
+      return res.status(400).json({ error: "Unsupported analysis type" });
     }
 
     try {
@@ -1977,8 +1884,7 @@ Strictly return the JSON matching this exact structure without any formatting wr
         });
 
         const dataStr = response.text || "{}";
-        const parsed = JSON.parse(dataStr);
-        return res.json({ success: true, ...parsed });
+        return res.json(JSON.parse(dataStr));
 
       } else if (type === "profile-optimization") {
         const prompt = `Optimize the following developer profile to match premium recruiters on "DeveloperConnect":
@@ -2012,8 +1918,7 @@ Strictly return the JSON matching this exact structure without any formatting wr
         });
 
         const dataStr = response.text || "{}";
-        const parsed = JSON.parse(dataStr);
-        return res.json({ success: true, ...parsed });
+        return res.json(JSON.parse(dataStr));
 
       } else if (type === "proposal-generation") {
         const prompt = `Generate a compelling, personalized cover letter / proposal brief:
@@ -2043,24 +1948,22 @@ Strictly return the JSON matching this exact structure without any formatting wr
         });
 
         const dataStr = response.text || "{}";
-        const parsed = JSON.parse(dataStr);
-        return res.json({ success: true, ...parsed });
+        return res.json(JSON.parse(dataStr));
       }
 
-      res.status(400).json({ success: false, error: "Unsupported analysis type" });
+      res.status(400).json({ error: "Unsupported analysis type" });
     } catch (e: any) {
       console.error("Gemini API call failed, using high-fidelity fallback.", e);
       // Failover fallback in case of rate limits or service constraints
       if (type === "project-analysis") {
         return res.json({
-          success: true,
           suggestedTech: ["React", "Node.js", "Jest", "Microservices"],
           recommendedRoles: ["Backend Engineer"],
           confidence: 88,
           estimatedDays: 30
         });
       }
-      res.status(500).json({ success: false, error: e.message || "Failed AI response" });
+      res.status(500).json({ error: e.message || "Failed AI response" });
     }
   });
 
@@ -2082,14 +1985,9 @@ Strictly return the JSON matching this exact structure without any formatting wr
     });
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 }
 
-// Start the app configuration
-setupApp(app).catch(err => {
-  console.error("🔴 Failed to setup Express app:", err);
-});
+startServer();

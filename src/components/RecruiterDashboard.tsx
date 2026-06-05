@@ -262,22 +262,12 @@ export default function RecruiterDashboard({
           payload: { title, description }
         })
       });
-      if (resp.ok) {
-        let data;
-        try {
-          data = await resp.json();
-        } catch (parseErr) {
-          console.error("[RECRUITER] AI analysis JSON parse error");
-          return;
-        }
-        if (data && data.suggestedTech && data.recommendedRoles) {
-          setAiMetrics(data);
-          setTechStackStr(data.suggestedTech.join(", "));
-          setDuration(`${Math.round(data.estimatedDays / 30)} months`);
-          alert("Gemini finished requirements analysis! Estimated timeline and suggested tech stack updated below.");
-        }
-      } else {
-        console.error(`[RECRUITER] AI analysis failed with status ${resp.status}`);
+      const data = await resp.json();
+      if (data.suggestedTech && data.recommendedRoles) {
+        setAiMetrics(data);
+        setTechStackStr(data.suggestedTech.join(", "));
+        setDuration(`${Math.round(data.estimatedDays / 30)} months`);
+        alert("Gemini finished requirements analysis! Estimated timeline and suggested tech stack updated below.");
       }
     } catch (e) {
       console.error(e);
@@ -1525,16 +1515,8 @@ export default function RecruiterDashboard({
                                             additionalConditions: addC
                                           })
                                         });
-                                        if (resp.ok) {
-                                          try {
-                                            const datInput = await resp.json();
-                                            setGeneratedNDATerms(prev => ({ ...prev, [app.developerId]: datInput.draft }));
-                                          } catch (parseErr) {
-                                            console.error("[RECRUITER] NDA generation parse error");
-                                          }
-                                        } else {
-                                          console.error(`[RECRUITER] NDA generation failed with status ${resp.status}`);
-                                        }
+                                        const datInput = await resp.json();
+                                        setGeneratedNDATerms(prev => ({ ...prev, [app.developerId]: datInput.draft }));
                                       } catch (e) {
                                         alert("Failed to draft via AI. Falling back to platform default legal template.");
                                       } finally {

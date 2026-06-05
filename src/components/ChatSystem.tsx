@@ -81,15 +81,7 @@ export default function ChatSystem({
     try {
       const resp = await fetch(`/api/chats/${chatId}/suggested-actions`);
       if (resp.ok) {
-        let data;
-        try {
-          data = await resp.json();
-        } catch (parseErr) {
-          console.error(`[CHAT] Failed to parse JSON from /api/chats/${chatId}/suggested-actions`);
-          const text = await resp.text();
-          console.error(`[CHAT] Raw response: ${text}`);
-          return;
-        }
+        const data = await resp.json();
         setSuggestedActions(data.suggestions || []);
       }
     } catch (e) {

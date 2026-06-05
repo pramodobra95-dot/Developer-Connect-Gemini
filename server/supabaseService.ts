@@ -3,8 +3,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || "";
 
 let supabase: SupabaseClient | null = null;
 
@@ -29,6 +29,82 @@ export function isSupabaseConfigured(): boolean {
 
 export function getSupabaseClient(): SupabaseClient | null {
   return supabase;
+}
+
+/**
+ * Resilient upsert helper that filters out un-migrated or missing columns from payloads
+ * to avoid schema cache and PostgreSQL constraint errors when syncing.
+ */
+async function resilientUpsert(tableName: string, payload: any, onConflict: string): Promise<boolean> {
+  if (!supabase) return false;
+  let currentPayload = { ...payload };
+  const maxRetries = 10;
+  let attempts = 0;
+
+  while (attempts < maxRetries) {
+    try {
+      const { error } = await supabase.from(tableName).upsert(currentPayload, { onConflict });
+      if (!error) {
+        return true;
+      }
+
+      const errMsg = error.message || "";
+      
+      // If the table itself is completely missing, log neutrally and return false
+      if (
+        errMsg.includes("Could not find the table") || 
+        (errMsg.includes("relation") && errMsg.includes("does not exist") && !errMsg.includes("column"))
+      ) {
+        console.info(`ℹ️ [SCHEMA NOTICE] Table "${tableName}" is missing in the database. Synchronization deferred for this table.`);
+        return false;
+      }
+
+      let foundMissingCol = false;
+      const lowerErr = errMsg.toLowerCase();
+      
+      // Attempt 1: Check standard payload keys present in error text
+      for (const key of Object.keys(currentPayload)) {
+        const lowerKey = key.toLowerCase();
+        if (
+          lowerErr.includes(`'${lowerKey}'`) || 
+          lowerErr.includes(`"${lowerKey}"`) || 
+          lowerErr.includes(`column ${lowerKey}`) ||
+          lowerErr.includes(`column "${lowerKey}"`) ||
+          lowerErr.includes(`column '${lowerKey}'`) ||
+          lowerErr.includes(`field ${lowerKey}`)
+        ) {
+          console.info(`🔧 [RECOVERY] Column "${key}" not in schema for "${tableName}". Stripping property and retrying.`);
+          delete currentPayload[key];
+          foundMissingCol = true;
+          break; // remove one column and retry
+        }
+      }
+
+      if (foundMissingCol) {
+        attempts++;
+        continue;
+      }
+
+      // Attempt 2: Use regex to extract single quoted or double quoted column names
+      const matchSchemaCache = errMsg.match(/Could not find the '([^'\s]+)' column/i);
+      const matchPostgres = errMsg.match(/column "([^"\s]+)"/i);
+      const missingColumn = (matchSchemaCache && matchSchemaCache[1]) || (matchPostgres && matchPostgres[1]);
+
+      if (missingColumn && missingColumn in currentPayload) {
+        console.info(`🔧 [RECOVERY] Strip schema-mismatched column "${missingColumn}" from "${tableName}". Retrying.`);
+        delete currentPayload[missingColumn];
+        attempts++;
+      } else {
+        // Unrecoverable
+        console.info(`ℹ️ [SYNC INFO] Table "${tableName}" upsert notice: ${errMsg}`);
+        return false;
+      }
+    } catch (err: any) {
+      console.info(`ℹ️ [SYNC INFO] Error writing to table "${tableName}":`, err?.message || err);
+      return false;
+    }
+  }
+  return false;
 }
 
 /**
@@ -173,8 +249,6 @@ CREATE TABLE IF NOT EXISTS disputes (
   proposed_resolution TEXT,
   status TEXT,
   mediator_id TEXT,
-  verdict_rationale TEXT,
-  split_ratio JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
@@ -211,17 +285,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   description TEXT,
   type TEXT,
   is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
-CREATE TABLE IF NOT EXISTS reviews (
-  id TEXT PRIMARY KEY,
-  project_id TEXT,
-  reviewer_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-  reviewer_name TEXT,
-  reviewee_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-  rating NUMERIC,
-  comment TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -444,75 +507,24 @@ export async function dbGetUsers(fallback: any[]): Promise<any[]> {
       createdAt: u.created_at,
       notificationPreferences: u.notification_preferences
     }));
-  } catch (err) {
-    console.warn("Supabase getUsers failed. Using local storage container.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetUsers: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveUser(user: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      is_verified: user.isVerified,
-      is_suspended: user.isSuspended,
-      created_at: user.createdAt,
-      notification_preferences: user.notificationPreferences
-    };
-    const { error } = await supabase.from("users").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveUser failed:", err);
-    return false;
-  }
-}
-
-// Reviews
-export async function dbGetReviews(fallback: any[]): Promise<any[]> {
-  if (!supabase) return fallback;
-  try {
-    const { data, error } = await supabase.from("reviews").select("*");
-    if (error) throw error;
-    return data.map(r => ({
-      id: r.id,
-      projectId: r.project_id,
-      reviewerId: r.reviewer_id,
-      reviewerName: r.reviewer_name,
-      revieweeId: r.reviewee_id,
-      rating: r.rating,
-      comment: r.comment,
-      createdAt: r.created_at
-    }));
-  } catch (err) {
-    console.warn("Supabase dbGetReviews failed.", err);
-    return fallback;
-  }
-}
-
-export async function dbSaveReview(review: any): Promise<boolean> {
-  if (!supabase) return false;
-  try {
-    const payload = {
-      id: review.id,
-      project_id: review.projectId,
-      reviewer_id: review.reviewerId,
-      reviewer_name: review.reviewerName,
-      reviewee_id: review.revieweeId,
-      rating: review.rating,
-      comment: review.comment,
-      created_at: review.createdAt
-    };
-    const { error } = await supabase.from("reviews").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveReview failed:", err);
-    return false;
-  }
+  const payload = {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    is_verified: user.isVerified,
+    is_suspended: user.isSuspended,
+    created_at: user.createdAt,
+    notification_preferences: user.notificationPreferences
+  };
+  return resilientUpsert("users", payload, "id");
 }
 
 // Developer Profiles
@@ -544,41 +556,34 @@ export async function dbGetDeveloperProfiles(fallback: Record<string, any>): Pro
       };
     }
     return profiles;
-  } catch (err) {
-    console.warn("Supabase dbGetDeveloperProfiles failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetDeveloperProfiles: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveDeveloperProfile(userId: string, profile: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      user_id: userId,
-      full_name: profile.fullName || "Unspecified",
-      headline: profile.headline,
-      bio: profile.bio,
-      skills: profile.skills,
-      tech_stack: profile.techStack,
-      experience_years: profile.experienceYears,
-      availability: profile.availability,
-      rates: profile.rates,
-      location: profile.location,
-      socials: profile.socials,
-      is_contact_visible: profile.isContactVisible,
-      phone_number: profile.phoneNumber,
-      email: profile.email,
-      status: profile.status,
-      avatar_url: profile.avatarUrl,
-      analytics: profile.analytics
-    };
-    const { error } = await supabase.from("developer_profiles").upsert(payload, { onConflict: "user_id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveDeveloperProfile failed:", err);
-    return false;
-  }
+  const payload = {
+    user_id: userId,
+    full_name: profile.fullName || "Unspecified",
+    headline: profile.headline,
+    bio: profile.bio,
+    skills: profile.skills,
+    tech_stack: profile.techStack,
+    experience_years: profile.experienceYears,
+    availability: profile.availability,
+    rates: profile.rates,
+    location: profile.location,
+    socials: profile.socials,
+    is_contact_visible: profile.isContactVisible,
+    phone_number: profile.phoneNumber,
+    email: profile.email,
+    status: profile.status,
+    avatar_url: profile.avatarUrl,
+    analytics: profile.analytics
+  };
+  return resilientUpsert("developer_profiles", payload, "user_id");
 }
 
 // Recruiter Profiles
@@ -603,34 +608,27 @@ export async function dbGetRecruiterProfiles(fallback: Record<string, any>): Pro
       };
     }
     return profiles;
-  } catch (err) {
-    console.warn("Supabase dbGetRecruiterProfiles failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetRecruiterProfiles: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveRecruiterProfile(userId: string, profile: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      user_id: userId,
-      company_name: profile.companyName || "Unspecified",
-      company_logo_url: profile.companyLogoUrl,
-      website: profile.website,
-      industry: profile.industry,
-      company_size: profile.companySize,
-      about_company: profile.aboutCompany,
-      full_name: profile.fullName || "Unspecified",
-      phone: profile.phone,
-      avatar_url: profile.avatarUrl
-    };
-    const { error } = await supabase.from("recruiter_profiles").upsert(payload, { onConflict: "user_id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveRecruiterProfile failed:", err);
-    return false;
-  }
+  const payload = {
+    user_id: userId,
+    company_name: profile.companyName || "Unspecified",
+    company_logo_url: profile.companyLogoUrl,
+    website: profile.website,
+    industry: profile.industry,
+    company_size: profile.companySize,
+    about_company: profile.aboutCompany,
+    full_name: profile.fullName || "Unspecified",
+    phone: profile.phone,
+    avatar_url: profile.avatarUrl
+  };
+  return resilientUpsert("recruiter_profiles", payload, "user_id");
 }
 
 // Projects
@@ -653,36 +651,29 @@ export async function dbGetProjects(fallback: any[]): Promise<any[]> {
       createdAt: p.created_at,
       aiSuggestedMetrics: typeof p.ai_suggested_metrics === "string" ? JSON.parse(p.ai_suggested_metrics) : p.ai_suggested_metrics
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetProjects failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetProjects: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveProject(project: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: project.id,
-      recruiter_id: project.recruiterId,
-      title: project.title,
-      description: project.description,
-      tech_stack: project.techStack,
-      budget: project.budget,
-      hiring_type: project.hiringType,
-      work_mode: project.workMode,
-      duration: project.duration,
-      status: project.status,
-      created_at: project.createdAt,
-      ai_suggested_metrics: project.aiSuggestedMetrics
-    };
-    const { error } = await supabase.from("projects").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveProject failed:", err);
-    return false;
-  }
+  const payload = {
+    id: project.id,
+    recruiter_id: project.recruiterId,
+    title: project.title,
+    description: project.description,
+    tech_stack: project.techStack,
+    budget: project.budget,
+    hiring_type: project.hiringType,
+    work_mode: project.workMode,
+    duration: project.duration,
+    status: project.status,
+    created_at: project.createdAt,
+    ai_suggested_metrics: project.aiSuggestedMetrics
+  };
+  return resilientUpsert("projects", payload, "id");
 }
 
 // Applications
@@ -702,33 +693,26 @@ export async function dbGetApplications(fallback: any[]): Promise<any[]> {
       status: a.status,
       createdAt: a.created_at
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetApplications failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetApplications: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveApplication(app: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: app.id,
-      project_id: app.projectId,
-      developer_id: app.developerId,
-      cover_letter: app.coverLetter,
-      proposed_rate: app.proposedRate,
-      availability: app.availability,
-      timeline_estimate: app.timelineEstimate,
-      status: app.status,
-      created_at: app.createdAt
-    };
-    const { error } = await supabase.from("applications").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveApplication failed:", err);
-    return false;
-  }
+  const payload = {
+    id: app.id,
+    project_id: app.projectId,
+    developer_id: app.developerId,
+    cover_letter: app.coverLetter,
+    proposed_rate: app.proposedRate,
+    availability: app.availability,
+    timeline_estimate: app.timelineEstimate,
+    status: app.status,
+    created_at: app.createdAt
+  };
+  return resilientUpsert("applications", payload, "id");
 }
 
 // Invites
@@ -746,31 +730,24 @@ export async function dbGetInvites(fallback: any[]): Promise<any[]> {
       status: i.status,
       createdAt: i.created_at
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetInvites failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetInvites: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveInvite(invite: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: invite.id,
-      project_id: invite.projectId,
-      recruiter_id: invite.recruiterId,
-      developer_id: invite.developerId,
-      message: invite.message,
-      status: invite.status,
-      created_at: invite.createdAt
-    };
-    const { error } = await supabase.from("invites").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveInvite failed:", err);
-    return false;
-  }
+  const payload = {
+    id: invite.id,
+    project_id: invite.projectId,
+    recruiter_id: invite.recruiterId,
+    developer_id: invite.developerId,
+    message: invite.message,
+    status: invite.status,
+    created_at: invite.createdAt
+  };
+  return resilientUpsert("invites", payload, "id");
 }
 
 // Contact requests
@@ -786,29 +763,22 @@ export async function dbGetContactRequests(fallback: any[]): Promise<any[]> {
       status: c.status,
       createdAt: c.created_at
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetContactRequests failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetContactRequests: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveContactRequest(req: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: req.id,
-      recruiter_id: req.recruiterId,
-      developer_id: req.developerId,
-      status: req.status,
-      created_at: req.createdAt
-    };
-    const { error } = await supabase.from("contact_access_requests").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveContactRequest failed:", err);
-    return false;
-  }
+  const payload = {
+    id: req.id,
+    recruiter_id: req.recruiterId,
+    developer_id: req.developerId,
+    status: req.status,
+    created_at: req.createdAt
+  };
+  return resilientUpsert("contact_access_requests", payload, "id");
 }
 
 // Chats
@@ -825,30 +795,23 @@ export async function dbGetChats(fallback: any[]): Promise<any[]> {
       updatedAt: c.updated_at,
       keepOpen: c.keep_open
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetChats failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetChats: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveChat(chat: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: chat.id,
-      developer_id: chat.developerId,
-      recruiter_id: chat.recruiterId,
-      last_message_text: chat.lastMessageText,
-      updated_at: chat.updatedAt,
-      keep_open: chat.keepOpen
-    };
-    const { error } = await supabase.from("chats").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveChat failed:", err);
-    return false;
-  }
+  const payload = {
+    id: chat.id,
+    developer_id: chat.developerId,
+    recruiter_id: chat.recruiterId,
+    last_message_text: chat.lastMessageText,
+    updated_at: chat.updatedAt,
+    keep_open: chat.keepOpen
+  };
+  return resilientUpsert("chats", payload, "id");
 }
 
 // Messages
@@ -868,33 +831,26 @@ export async function dbGetMessages(chatId: string, fallback: any[]): Promise<an
       seen: m.seen,
       createdAt: m.created_at
     }));
-  } catch (err) {
-    console.warn(`Supabase dbGetMessages for chat: ${chatId} failed.`, err);
+  } catch (err: any) {
+    console.info(`ℹ️ [SCHEMA NOTICE] dbGetMessages for chat ${chatId}: using local fallback.`, err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveMessage(msg: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: msg.id,
-      chat_id: msg.chatId,
-      sender_id: msg.senderId,
-      receiver_id: msg.receiverId,
-      text: msg.text,
-      file_url: msg.fileUrl,
-      file_type: msg.fileType,
-      seen: msg.seen,
-      created_at: msg.createdAt
-    };
-    const { error } = await supabase.from("messages").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveMessage failed:", err);
-    return false;
-  }
+  const payload = {
+    id: msg.id,
+    chat_id: msg.chatId,
+    sender_id: msg.senderId,
+    receiver_id: msg.receiverId,
+    text: msg.text,
+    file_url: msg.fileUrl,
+    file_type: msg.fileType,
+    seen: msg.seen,
+    created_at: msg.createdAt
+  };
+  return resilientUpsert("messages", payload, "id");
 }
 
 // Project Stages
@@ -913,32 +869,25 @@ export async function dbGetProjectStages(fallback: any[]): Promise<any[]> {
       createdBy: s.created_by,
       status: s.status
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetProjectStages failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetProjectStages: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveProjectStage(stage: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: stage.id,
-      project_id: stage.projectId,
-      title: stage.title,
-      description: stage.description,
-      cost: stage.cost,
-      due_date: stage.dueDate,
-      created_by: stage.createdBy,
-      status: stage.status
-    };
-    const { error } = await supabase.from("project_stages").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveProjectStage failed:", err);
-    return false;
-  }
+  const payload = {
+    id: stage.id,
+    project_id: stage.projectId,
+    title: stage.title,
+    description: stage.description,
+    cost: stage.cost,
+    due_date: stage.dueDate,
+    created_by: stage.createdBy,
+    status: stage.status
+  };
+  return resilientUpsert("project_stages", payload, "id");
 }
 
 // NDAs
@@ -960,35 +909,28 @@ export async function dbGetNDAs(fallback: any[]): Promise<any[]> {
       developerSignedAt: n.developer_signed_at,
       createdAt: n.created_at
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetNDAs failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetNDAs: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveNDA(nda: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: nda.id,
-      project_id: nda.projectId,
-      developer_id: nda.developerId,
-      recruiter_id: nda.recruiterId,
-      terms: nda.terms,
-      status: nda.status,
-      recruiter_signature: nda.recruiterSignature,
-      developer_signature: nda.developerSignature,
-      recruiter_signed_at: nda.recruiterSignedAt,
-      developer_signed_at: nda.developerSignedAt,
-      created_at: nda.createdAt
-    };
-    const { error } = await supabase.from("ndas").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveNDA failed:", err);
-    return false;
-  }
+  const payload = {
+    id: nda.id,
+    project_id: nda.projectId,
+    developer_id: nda.developerId,
+    recruiter_id: nda.recruiterId,
+    terms: nda.terms,
+    status: nda.status,
+    recruiter_signature: nda.recruiterSignature,
+    developer_signature: nda.developerSignature,
+    recruiter_signed_at: nda.recruiterSignedAt,
+    developer_signed_at: nda.developerSignedAt,
+    created_at: nda.createdAt
+  };
+  return resilientUpsert("ndas", payload, "id");
 }
 
 // Notifications
@@ -1006,31 +948,24 @@ export async function dbGetNotifications(fallback: any[]): Promise<any[]> {
       isRead: n.is_read,
       createdAt: n.created_at
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetNotifications failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetNotifications: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveNotification(notif: any): Promise<boolean> {
   if (!supabase) return false;
-  try {
-    const payload = {
-      id: notif.id,
-      user_id: notif.userId,
-      title: notif.title,
-      description: notif.description,
-      type: notif.type,
-      is_read: notif.isRead,
-      created_at: notif.createdAt
-    };
-    const { error } = await supabase.from("notifications").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveNotification failed:", err);
-    return false;
-  }
+  const payload = {
+    id: notif.id,
+    user_id: notif.userId,
+    title: notif.title,
+    description: notif.description,
+    type: notif.type,
+    is_read: notif.isRead,
+    created_at: notif.createdAt
+  };
+  return resilientUpsert("notifications", payload, "id");
 }
 
 // Disputes
@@ -1051,42 +986,94 @@ export async function dbGetDisputes(fallback: any[]): Promise<any[]> {
       proposedResolution: d.proposed_resolution,
       status: d.status,
       mediatorId: d.mediator_id,
-      verdictRationale: d.verdict_rationale,
-      splitRatio: typeof d.split_ratio === "string" ? JSON.parse(d.split_ratio) : d.split_ratio,
       createdAt: d.created_at,
       updatedAt: d.updated_at
     }));
-  } catch (err) {
-    console.warn("Supabase dbGetDisputes failed.", err);
+  } catch (err: any) {
+    console.info("ℹ️ [SCHEMA NOTICE] dbGetDisputes: using local fallback.", err?.message || err);
     return fallback;
   }
 }
 
 export async function dbSaveDispute(dispute: any): Promise<boolean> {
   if (!supabase) return false;
+  const payload = {
+    id: dispute.id,
+    project_id: dispute.projectId,
+    milestone_title: dispute.milestoneTitle,
+    claimant_id: dispute.claimantId,
+    opponent_id: dispute.opponentId,
+    reason: dispute.reason,
+    details: dispute.details,
+    escrow_amount: dispute.escrowAmount,
+    proposed_resolution: dispute.proposedResolution,
+    status: dispute.status,
+    mediator_id: dispute.mediatorId,
+    created_at: dispute.createdAt,
+    updated_at: dispute.updatedAt
+  };
+  return resilientUpsert("disputes", payload, "id");
+}
+
+/**
+ * Uploads a base64-encoded file directly to a Supabase Storage bucket "dc-attachments".
+ * Returns the public URL of the uploaded file on success, or falls back to returning the original base64 URL on failure.
+ */
+export async function dbUploadFile(base64Data: string, fileName: string): Promise<string> {
+  if (!supabase) return base64Data;
+  if (!base64Data || !base64Data.startsWith("data:")) return base64Data;
+
   try {
-    const payload = {
-      id: dispute.id,
-      project_id: dispute.projectId,
-      milestone_title: dispute.milestoneTitle,
-      claimant_id: dispute.claimantId,
-      opponent_id: dispute.opponentId,
-      reason: dispute.reason,
-      details: dispute.details,
-      escrow_amount: dispute.escrowAmount,
-      proposed_resolution: dispute.proposedResolution,
-      status: dispute.status,
-      mediator_id: dispute.mediatorId,
-      verdict_rationale: dispute.verdictRationale,
-      split_ratio: dispute.splitRatio,
-      created_at: dispute.createdAt,
-      updated_at: dispute.updatedAt
-    };
-    const { error } = await supabase.from("disputes").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error("Supabase dbSaveDispute failed:", err);
-    return false;
+    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length < 3) return base64Data;
+
+    const contentType = matches[1];
+    const base64Content = matches[2];
+    const buffer = Buffer.from(base64Content, 'base64');
+    
+    // Clean filename and generate a unique path (timestamp + clean name)
+    const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const uniquePath = `chat_uploads/${Date.now()}_${cleanFileName}`;
+    const bucketName = "dc-attachments";
+
+    // Try to upload the file to Supabase Storage
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .upload(uniquePath, buffer, {
+        contentType,
+        upsert: true
+      });
+
+    // Handle bucket auto-creation if bucket doesn't exist
+    if (error && error.message.includes("does not exist")) {
+      console.log(`🪣 Storage Bucket "${bucketName}" not found. Auto-creating public bucket now...`);
+      const { error: createBucketError } = await supabase.storage.createBucket(bucketName, {
+        public: true,
+        fileSizeLimit: 52428800 // 50MB
+      });
+      
+      if (!createBucketError) {
+        // Retry upload after bucket setup
+        const { error: retryError } = await supabase.storage
+          .from(bucketName)
+          .upload(uniquePath, buffer, {
+            contentType,
+            upsert: true
+          });
+        if (retryError) throw retryError;
+      } else {
+        throw error;
+      }
+    } else if (error) {
+      throw error;
+    }
+
+    const { data } = supabase.storage.from(bucketName).getPublicUrl(uniquePath);
+    console.log(`🟢 [SUPABASE STORAGE SUCCESS] Asset linked at: ${data?.publicUrl}`);
+    return data?.publicUrl || base64Data;
+  } catch (err: any) {
+    console.error("🔴 [SUPABASE STORAGE FAIL] Falling back to default container URL representation:", err?.message || err);
+    return base64Data;
   }
 }
+
