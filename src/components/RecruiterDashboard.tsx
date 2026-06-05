@@ -42,6 +42,7 @@ import {
   NDA,
   Review
 } from "../types.js";
+import EmailGatewaySettings from "./EmailGatewaySettings.tsx";
 
 interface RecruiterDashboardProps {
   currentUser: User;
@@ -604,6 +605,8 @@ export default function RecruiterDashboard({
               </button>
             </div>
           </div>
+
+          <EmailGatewaySettings />
         </div>
       )}
 

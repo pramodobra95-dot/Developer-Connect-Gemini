@@ -20,6 +20,7 @@ import {
 import Header from "./components/Header.tsx";
 import DeveloperDashboard from "./components/DeveloperDashboard.tsx";
 import RecruiterDashboard from "./components/RecruiterDashboard.tsx";
+import { triggerNewApplicationNotification, triggerProjectStatusChangeNotification } from "./services/emailService.ts";
 import AdminPanel from "./components/AdminPanel.tsx";
 import ChatSystem from "./components/ChatSystem.tsx";
 import LandingPage from "./components/LandingPage.tsx";
@@ -234,6 +235,29 @@ export default function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, status })
     });
+    
+    // Notify dev applicants of project progression status changes
+    try {
+      const project = projects.find(p => p.id === projectId);
+      if (project) {
+        const projectApps = applications.filter(a => a.projectId === projectId);
+        for (const appRecord of projectApps) {
+          const devUser = allUsers.find(u => u.id === appRecord.developerId);
+          if (devUser && devUser.notificationPreferences?.emailApplicationUpdates !== false) {
+            await triggerProjectStatusChangeNotification(
+              devUser.email,
+              devUser.fullName || devUser.email,
+              project.title,
+              status,
+              `The recruiter has updated the status of project "${project.title}" to ${status}.`
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to trigger project status update email", err);
+    }
+
     fetchData();
   };
 
@@ -302,6 +326,31 @@ export default function App() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, coverLetter: cover, proposedRate, availability: avail, timelineEstimate: timeline })
     });
+
+    try {
+      const project = projects.find(p => p.id === projectId);
+      if (project) {
+        const recruiterUser = allUsers.find(u => u.id === project.recruiterId);
+        if (recruiterUser && recruiterUser.notificationPreferences?.emailApplicationUpdates !== false) {
+          const rEmail = recruiterUser.email;
+          const rName = recruiterUser.fullName || rEmail;
+          const dName = devProfile?.fullName || currentUser?.email || "A pre-vetted Developer";
+          
+          await triggerNewApplicationNotification(
+            rEmail,
+            rName,
+            project.title,
+            dName,
+            proposedRate,
+            timeline,
+            cover
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to trigger new application email notification", err);
+    }
+
     fetchData();
   };
 
@@ -391,6 +440,26 @@ export default function App() {
 
     if (status === ApplicationStatus.ACCEPTED && matchApp) {
       await handleInitiateChat(currentUser?.id || matchApp.recruiterId, matchApp.developerId);
+    }
+
+    // Trigger status update email alert to the applicant developer
+    try {
+      const appRecord = matchApp || applications.find(a => a.id === applicationId);
+      if (appRecord) {
+        const project = projects.find(p => p.id === appRecord.projectId);
+        const devUser = allUsers.find(u => u.id === appRecord.developerId);
+        if (project && devUser && devUser.notificationPreferences?.emailApplicationUpdates !== false) {
+          await triggerProjectStatusChangeNotification(
+            devUser.email,
+            devUser.fullName || devUser.email,
+            project.title,
+            `APPLICATION_${status}`,
+            `Your proposal application status for project "${project.title}" has been updated to: ${status}.`
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to trigger application update email notification", err);
     }
   };
 

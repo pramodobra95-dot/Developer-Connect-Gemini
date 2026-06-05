@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   User as UserIcon, 
   MapPin, 
@@ -18,7 +18,10 @@ import {
   Phone,
   Paperclip,
   Share2,
-  FileText
+  FileText,
+  SlidersHorizontal,
+  X,
+  Filter
 } from "lucide-react";
 import { 
   User, 
@@ -32,6 +35,7 @@ import {
   ContactAccessRequest,
   Review
 } from "../types.js";
+import EmailGatewaySettings from "./EmailGatewaySettings.tsx";
 
 interface DeveloperDashboardProps {
   currentUser: User;
@@ -95,6 +99,7 @@ export default function DeveloperDashboard({
   const [selectedTechs, setSelectedTechs] = useState<string[]>([]);
   const [selectedHiringTypes, setSelectedHiringTypes] = useState<string[]>([]);
   const [selectedBudgets, setSelectedBudgets] = useState<string[]>([]);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   
   // Profile edit state
   const [fullName, setFullName] = useState(devProfile.fullName || "");
@@ -861,8 +866,9 @@ export default function DeveloperDashboard({
             </div>
           </div>
 
-          {/* MULTI-SELECT FILTER CONTROLS HUB */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-fade-in text-xs text-slate-800">
+          {/* ADAPTIVE FILTER CONTROLS HUBS */}
+          {/* 1. Desktop View Inline Filters */}
+          <div className="hidden lg:block bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-fade-in text-xs text-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-3">
               <div>
                 <span className="text-[10px] font-mono tracking-widest text-slate-400 uppercase font-bold">Filter Workspace ({filteredProjects.length} results)</span>
@@ -979,6 +985,284 @@ export default function DeveloperDashboard({
               </div>
             </div>
           </div>
+
+          {/* 2. Adaptive Compact Mobile/Tablet Trigger Bar */}
+          <div className="lg:hidden bg-white border border-slate-200 rounded-2xl p-4 shadow-sm animate-fade-in text-xs text-slate-800 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-slate-800">Job Parameters Matching</h4>
+                <p className="text-[10px] text-slate-500">{filteredProjects.length} candidate projects filtered</p>
+              </div>
+              <button
+                type="button"
+                id="toggle-mobile-filters-btn"
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="bg-brand-teal text-white hover:bg-[#0d6e66] active:scale-98 font-bold text-[11px] px-3.5 py-2.5 rounded-xl cursor-pointer flex items-center gap-1.5 shadow-sm transition-all outline-none"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Filters</span>
+                {(selectedTechs.length + selectedHiringTypes.length + selectedBudgets.length) > 0 && (
+                  <span className="bg-[#001c3d] text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black ml-1">
+                    {selectedTechs.length + selectedHiringTypes.length + selectedBudgets.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Tap-to-remove active filters list */}
+            {(selectedTechs.length > 0 || selectedHiringTypes.length > 0 || selectedBudgets.length > 0) && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-100">
+                <span className="text-[9px] font-mono uppercase text-slate-400 mr-1 font-bold">Active:</span>
+                {selectedTechs.map(tech => (
+                  <button
+                    key={tech}
+                    type="button"
+                    onClick={() => setSelectedTechs(prev => prev.filter(t => t !== tech))}
+                    className="bg-slate-50 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-700 text-[9px] font-mono pl-2 pr-1.5 py-0.5 rounded-lg border border-slate-200 flex items-center gap-1 outline-none transition-all cursor-pointer"
+                  >
+                    <span>{tech}</span>
+                    <X className="w-2.5 h-2.5 opacity-60" />
+                  </button>
+                ))}
+                {selectedHiringTypes.map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSelectedHiringTypes(prev => prev.filter(h => h !== type))}
+                    className="bg-slate-50 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-700 text-[9px] font-mono pl-2 pr-1.5 py-0.5 rounded-lg border border-slate-200 flex items-center gap-1 outline-none transition-all cursor-pointer"
+                  >
+                    <span>{type}</span>
+                    <X className="w-2.5 h-2.5 opacity-60" />
+                  </button>
+                ))}
+                {selectedBudgets.map(val => {
+                  const label = budgetOptions.find(o => o.value === val)?.label || val;
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setSelectedBudgets(prev => prev.filter(b => b !== val))}
+                      className="bg-slate-50 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-slate-700 text-[9px] font-mono pl-2 pr-1.5 py-0.5 rounded-lg border border-slate-200 flex items-center gap-1 outline-none transition-all cursor-pointer"
+                    >
+                      <span>{label}</span>
+                      <X className="w-2.5 h-2.5 opacity-60" />
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTechs([]);
+                    setSelectedHiringTypes([]);
+                    setSelectedBudgets([]);
+                  }}
+                  className="text-[9px] font-mono font-bold text-rose-600 hover:underline cursor-pointer ml-auto pl-2"
+                >
+                  Clear All
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Off-Canvas Drawer Implementation utilizing AnimatePresence */}
+          <AnimatePresence>
+            {isMobileFilterOpen && (
+              <div id="mobile-filter-drawer-system" className="relative z-50 lg:hidden">
+                {/* Backdrop overlay */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsMobileFilterOpen(false)}
+                  className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50"
+                />
+
+                {/* Sliding Drawer Container */}
+                <motion.div
+                  initial={{ x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "100%" }}
+                  transition={{ type: "spring", damping: 25, stiffness: 220 }}
+                  className="fixed inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl flex flex-col h-full z-50 text-slate-800"
+                >
+                  {/* Drawer Header */}
+                  <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-950 flex items-center gap-1.5">
+                        <Filter className="w-4 h-4 text-brand-teal" /> Filter Projects
+                      </h4>
+                      <p className="text-[10px] text-slate-500 font-mono">{filteredProjects.length} matching result{filteredProjects.length === 1 ? "" : "s"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileFilterOpen(false)}
+                      className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition-colors outline-none cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Drawer Content - Scrollable */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-6 text-xs">
+                    {/* Technology Stack filter */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono uppercase font-bold text-slate-500">Technology Stack</span>
+                        {selectedTechs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTechs([])}
+                            className="text-[10px] font-mono text-rose-500 font-semibold hover:underline cursor-pointer"
+                          >
+                            clear stack
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableTechs.length === 0 ? (
+                          <span className="text-xs text-slate-400 italic">No technology tags indexed.</span>
+                        ) : (
+                          availableTechs.map(tech => {
+                            const isSelected = selectedTechs.includes(tech);
+                            return (
+                              <button
+                                key={tech}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedTechs(prev => prev.filter(t => t !== tech));
+                                  } else {
+                                    setSelectedTechs(prev => [...prev, tech]);
+                                  }
+                                }}
+                                className={`text-[10px] font-mono px-3 py-1.5 rounded-lg transition-all border font-semibold outline-none cursor-pointer ${
+                                  isSelected 
+                                    ? "bg-brand-teal text-white border-brand-teal font-bold" 
+                                    : "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200"
+                                }`}
+                              >
+                                {tech} {isSelected ? "✕" : ""}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Hiring Nature filter */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono uppercase font-bold text-slate-500">Hiring Nature Scope</span>
+                        {selectedHiringTypes.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedHiringTypes([])}
+                            className="text-[10px] font-mono text-rose-500 font-semibold hover:underline cursor-pointer"
+                          >
+                            clear scope
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableHiringTypes.map(type => {
+                          const isSelected = selectedHiringTypes.includes(type);
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedHiringTypes(prev => prev.filter(h => h !== type));
+                                } else {
+                                  setSelectedHiringTypes(prev => [...prev, type]);
+                                }
+                              }}
+                              className={`text-[10px] font-mono px-3 py-1.5 rounded-lg transition-all border font-semibold outline-none cursor-pointer ${
+                                isSelected 
+                                  ? "bg-brand-teal text-white border-brand-teal font-bold" 
+                                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200"
+                              }`}
+                            >
+                              {type} {isSelected ? "✕" : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Budget Bracket filter */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono uppercase font-bold text-slate-500">Budget Bracket (₹)</span>
+                        {selectedBudgets.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBudgets([])}
+                            className="text-[10px] font-mono text-rose-500 font-semibold hover:underline cursor-pointer"
+                          >
+                            clear budget
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {budgetOptions.map(opt => {
+                          const isSelected = selectedBudgets.includes(opt.value);
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedBudgets(prev => prev.filter(b => b !== opt.value));
+                                } else {
+                                  setSelectedBudgets(prev => [...prev, opt.value]);
+                                }
+                              }}
+                              className={`text-left text-[11px] px-3.5 py-2.5 rounded-xl border flex items-center justify-between font-medium outline-none transition-all cursor-pointer ${
+                                isSelected 
+                                  ? "bg-brand-teal/5 text-brand-teal border-brand-teal font-bold" 
+                                  : "bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200"
+                              }`}
+                            >
+                              <span>{opt.label}</span>
+                              {isSelected && <span className="text-brand-teal font-bold">✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sticky Bottom Actions Bar */}
+                  <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0 flex gap-2.5">
+                    {(selectedTechs.length > 0 || selectedHiringTypes.length > 0 || selectedBudgets.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTechs([]);
+                          setSelectedHiringTypes([]);
+                          setSelectedBudgets([]);
+                        }}
+                        className="bg-slate-150 hover:bg-slate-200 text-slate-700 font-bold px-4 py-3 rounded-xl transition-all cursor-pointer flex-1 outline-none text-[11px]"
+                      >
+                        Reset All
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileFilterOpen(false)}
+                      className="bg-brand-teal hover:bg-[#0d6e66] text-white font-bold px-5 py-3 rounded-xl shadow-xs transition-all cursor-pointer flex-1 text-center outline-none text-[11px]"
+                    >
+                      {filteredProjects.length === 0 
+                        ? "Close Filters" 
+                        : `Show ${filteredProjects.length} project${filteredProjects.length === 1 ? "" : "s"}`
+                      }
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           {filteredProjects.length === 0 ? (
             <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl space-y-3 shadow-sm animate-fade-in text-xs text-slate-800">
@@ -1625,6 +1909,8 @@ export default function DeveloperDashboard({
               </button>
             </div>
           </div>
+
+          <EmailGatewaySettings />
         </div>
       )}
 
