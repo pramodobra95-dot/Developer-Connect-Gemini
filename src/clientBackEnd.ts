@@ -622,25 +622,31 @@ export const setupClientBackEnd = () => {
   initializeStorageDatabase();
 
   const originalFetch = window.fetch;
+  let backendCheckPromise: Promise<boolean> | null = null;
 
   const customFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as any).url || "";
 
     if (url.startsWith("/api/")) {
-      // Dynamic probe activation
-      if ((window as any)._isBackendChecked === undefined) {
-        try {
-          const testRes = await originalFetch("/api/session");
-          const ct = testRes.headers.get("content-type");
-          if (testRes.ok && ct && ct.includes("application/json")) {
-            (window as any)._useClientMock = false;
-          } else {
+      // Dynamic probe activation with promise deduplication
+      if ((window as any)._useClientMock === undefined) {
+        if (!backendCheckPromise) {
+          backendCheckPromise = (async () => {
+            try {
+              const testRes = await originalFetch("/api/session");
+              const ct = testRes.headers.get("content-type");
+              if (testRes.ok && ct && ct.includes("application/json")) {
+                (window as any)._useClientMock = false;
+                return false;
+              }
+            } catch (e) {
+              // Ignore probe failure and default to mock database
+            }
             (window as any)._useClientMock = true;
-          }
-        } catch (e) {
-          (window as any)._useClientMock = true;
+            return true;
+          })();
         }
-        (window as any)._isBackendChecked = true;
+        await backendCheckPromise;
       }
 
       if ((window as any)._useClientMock) {
