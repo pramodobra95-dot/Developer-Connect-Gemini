@@ -1046,12 +1046,16 @@ export async function dbSaveDispute(dispute: any): Promise<boolean> {
 }
 
 /**
- * Uploads a base64-encoded file directly to a Supabase Storage bucket "dc-attachments".
- * Returns the public URL of the uploaded file on success, or falls back to returning the original base64 URL on failure.
+ * Uploads a base64-encoded file directly to a specified Supabase Storage bucket.
+ * Supported buckets: avatars, company-logos, resumes, project-files, chat-attachments.
  */
-export async function dbUploadFile(base64Data: string, fileName: string): Promise<string> {
+export async function dbUploadFile(base64Data: string, fileName: string, bucketName: string = "chat-attachments"): Promise<string> {
   if (!supabase) return base64Data;
   if (!base64Data || !base64Data.startsWith("data:")) return base64Data;
+
+  // Validate bucket name
+  const validBuckets = ["avatars", "company-logos", "resumes", "project-files", "chat-attachments"];
+  const targetBucket = validBuckets.includes(bucketName) ? bucketName : "chat-attachments";
 
   try {
     const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
@@ -1061,31 +1065,29 @@ export async function dbUploadFile(base64Data: string, fileName: string): Promis
     const base64Content = matches[2];
     const buffer = Buffer.from(base64Content, 'base64');
     
-    // Clean filename and generate a unique path (timestamp + clean name)
+    // Clean filename and generate a unique path
     const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const uniquePath = `chat_uploads/${Date.now()}_${cleanFileName}`;
-    const bucketName = "dc-attachments";
+    const uniquePath = `${Date.now()}_${cleanFileName}`;
 
-    // Try to upload the file to Supabase Storage
+    // Try to upload
     const { error } = await supabase.storage
-      .from(bucketName)
+      .from(targetBucket)
       .upload(uniquePath, buffer, {
         contentType,
         upsert: true
       });
 
-    // Handle bucket auto-creation if bucket doesn't exist
+    // Handle bucket auto-creation
     if (error && error.message.includes("does not exist")) {
-      console.log(`🪣 Storage Bucket "${bucketName}" not found. Auto-creating public bucket now...`);
-      const { error: createBucketError } = await supabase.storage.createBucket(bucketName, {
+      console.log(`🪣 Storage Bucket "${targetBucket}" not found. Auto-creating public bucket now...`);
+      const { error: createBucketError } = await supabase.storage.createBucket(targetBucket, {
         public: true,
         fileSizeLimit: 52428800 // 50MB
       });
       
       if (!createBucketError) {
-        // Retry upload after bucket setup
         const { error: retryError } = await supabase.storage
-          .from(bucketName)
+          .from(targetBucket)
           .upload(uniquePath, buffer, {
             contentType,
             upsert: true
@@ -1098,11 +1100,11 @@ export async function dbUploadFile(base64Data: string, fileName: string): Promis
       throw error;
     }
 
-    const { data } = supabase.storage.from(bucketName).getPublicUrl(uniquePath);
-    console.log(`🟢 [SUPABASE STORAGE SUCCESS] Asset linked at: ${data?.publicUrl}`);
+    const { data } = supabase.storage.from(targetBucket).getPublicUrl(uniquePath);
+    console.log(`🟢 [SUPABASE STORAGE SUCCESS] Asset linked in ${targetBucket} at: ${data?.publicUrl}`);
     return data?.publicUrl || base64Data;
   } catch (err: any) {
-    console.error("🔴 [SUPABASE STORAGE FAIL] Falling back to default container URL representation:", err?.message || err);
+    console.error(`🔴 [SUPABASE STORAGE FAIL] Bucket: ${targetBucket}`, err?.message || err);
     return base64Data;
   }
 }

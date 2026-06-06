@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { 
   Zap, 
   Check, 
@@ -39,10 +40,16 @@ interface LandingPageProps {
 export default function LandingPage({
   projectsList,
   usersList,
-  onLoginSuccess
-}: LandingPageProps) {
+  onLoginSuccess,
+  initialTab = "login"
+}: LandingPageProps & { initialTab?: "login" | "signup" }) {
+  const navigate = useNavigate();
   // Navigation & auth UI flags
-  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
+  const [activeTab, setActiveTab] = useState<"login" | "signup">(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [selectedRole, setSelectedRole] = useState<"DEVELOPER" | "RECRUITER">("DEVELOPER");
   
   // Email Verification State
@@ -387,8 +394,8 @@ export default function LandingPage({
           {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center gap-6 text-xs font-semibold text-slate-600 uppercase tracking-wide">
             <a href="#about" className="hover:text-brand-teal transition-colors">About Us</a>
-            <a href="#profiles" className="hover:text-brand-teal transition-colors">Developer Pool</a>
-            <a href="#faq" className="hover:text-brand-teal transition-colors">Rules & FAQ</a>
+            <Link to="/scout" className="hover:text-brand-teal transition-colors">Developer Pool</Link>
+            <Link to="/faq" className="hover:text-brand-teal transition-colors">Rules & FAQ</Link>
             <a href="#terms" className="hover:text-brand-teal transition-colors">Terms of Work</a>
             <a href="#contact" className="hover:text-brand-teal transition-colors">Contact Us</a>
           </div>
@@ -396,19 +403,18 @@ export default function LandingPage({
           <div className="flex items-center gap-2">
             {/* Desktop Action Buttons */}
             <div className="hidden sm:flex items-center gap-2">
-              <a 
-                href="#auth-section" 
+              <Link
+                to="/login"
                 className="bg-brand-teal-light text-brand-teal-dark text-xs px-4 py-2 rounded-xl font-bold hover:bg-brand-teal/10 transition-colors border border-brand-teal/20"
               >
                 Sign In
-              </a>
-              <a 
-                href="#auth-section" 
-                onClick={() => setActiveTab("signup")} 
+              </Link>
+              <Link
+                to="/signup"
                 className="bg-brand-teal text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-brand-teal-dark transition-all shadow-sm"
               >
                 Register
-              </a>
+              </Link>
             </div>
 
             {/* Mobile Hamburger toggle */}
@@ -463,20 +469,20 @@ export default function LandingPage({
               </a>
               
               <div className="pt-2 flex gap-2 sm:hidden border-t border-slate-100">
-                <a 
-                  href="#auth-section" 
-                  onClick={() => { setMobileMenuOpen(false); setActiveTab("login"); }}
+                <Link
+                  to="/login"
+                  onClick={() => { setMobileMenuOpen(false); }}
                   className="flex-1 text-center bg-brand-teal-light text-brand-teal-dark text-xs py-2.5 rounded-xl font-bold border border-brand-teal/20"
                 >
                   Sign In
-                </a>
-                <a 
-                  href="#auth-section" 
-                  onClick={() => { setMobileMenuOpen(false); setActiveTab("signup"); }}
+                </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => { setMobileMenuOpen(false); }}
                   className="flex-1 text-center bg-brand-teal text-white text-xs py-2.5 rounded-xl font-bold"
                 >
                   Register
-                </a>
+                </Link>
               </div>
             </div>
           </div>
@@ -514,20 +520,18 @@ export default function LandingPage({
             </p>
 
             <div className="flex flex-wrap gap-4 pt-2">
-              <a 
-                href="#auth-section" 
-                onClick={() => { setActiveTab("signup"); setSelectedRole("RECRUITER"); }}
+              <button
+                onClick={() => { setSelectedRole("RECRUITER"); navigate("/signup"); }}
                 className="bg-[#00b4a0] hover:bg-[#008f7e] text-white font-bold text-xs px-6 py-3.5 rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
               >
                 Post a project <ArrowRight className="w-4 h-4 text-white" />
-              </a>
-              <a 
-                href="#auth-section" 
-                onClick={() => { setActiveTab("signup"); setSelectedRole("DEVELOPER"); }}
+              </button>
+              <button
+                onClick={() => { setSelectedRole("DEVELOPER"); navigate("/signup"); }}
                 className="bg-transparent hover:bg-white/10 text-white font-bold text-xs px-6 py-3.5 rounded-xl transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer"
               >
                 I'm a developer
-              </a>
+              </button>
             </div>
 
             <p className="text-[#a5d2cb] text-[11px] font-mono pt-1">
@@ -1196,9 +1200,9 @@ export default function LandingPage({
                 Review the dynamic contracts registered into our platform directories. Select or sign-up to apply immediately.
               </p>
             </div>
-            <a href="#auth-section" className="bg-white hover:bg-slate-100 text-slate-850 text-xs px-5 py-2.5 rounded-lg border border-slate-200 font-bold flex items-center gap-1.5 transition-all">
+            <Link to="/login" className="bg-white hover:bg-slate-100 text-slate-850 text-xs px-5 py-2.5 rounded-lg border border-slate-200 font-bold flex items-center gap-1.5 transition-all">
               View All Enquiries <ChevronRight className="w-4 h-4 text-slate-400" />
-            </a>
+            </Link>
           </div>
 
           {projectsList.length === 0 ? (
@@ -1213,9 +1217,9 @@ export default function LandingPage({
                 </p>
               </div>
               <div className="pt-2">
-                <a href="#auth-section" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-bold hover:bg-brand-teal-dark px-4 py-2 rounded-xl text-xs transition-colors">
+                <Link to="/signup" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-bold hover:bg-brand-teal-dark px-4 py-2 rounded-xl text-xs transition-colors">
                   Create a Project Listing Now
-                </a>
+                </Link>
               </div>
             </div>
           ) : (
@@ -1246,7 +1250,7 @@ export default function LandingPage({
 
                   <div className="border-t border-slate-100 pt-4 mt-6 flex items-center justify-between text-[11px] text-slate-500">
                     <span>Duration Forecast: {proj.duration}</span>
-                    <a href="#auth-section" className="text-brand-teal font-extrabold hover:underline">Apply to Escrow</a>
+                    <Link to="/login" className="text-brand-teal font-extrabold hover:underline">Apply to Escrow</Link>
                   </div>
                 </div>
               ))}
@@ -1280,9 +1284,9 @@ export default function LandingPage({
                 </p>
               </div>
               <div className="pt-2">
-                <a href="#auth-section" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-bold hover:bg-brand-teal-dark px-4 py-2 rounded-xl text-xs transition-colors">
+                <Link to="/signup" className="inline-flex items-center gap-1.5 bg-brand-teal text-white font-bold hover:bg-brand-teal-dark px-4 py-2 rounded-xl text-xs transition-colors">
                   Submit Vetted Profile Now
-                </a>
+                </Link>
               </div>
             </div>
           ) : (
@@ -1296,6 +1300,7 @@ export default function LandingPage({
                         src={dev.avatarUrl || "https://api.dicebear.com/7.x/adventurer/svg?seed=Aryan"} 
                         alt={dev.fullName}
                         referrerPolicy="no-referrer"
+                        loading="lazy"
                       />
                       <div>
                         <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1">
@@ -1322,9 +1327,9 @@ export default function LandingPage({
 
                   <div className="border-t border-slate-200/80 pt-4 mt-6 flex items-center justify-between text-xs font-mono text-slate-500">
                     <span>Minimum Rate: ₹{dev.rates?.hourly?.toLocaleString()}/hr</span>
-                    <a href="#auth-section" className="bg-white text-brand-teal hover:bg-brand-teal-light border border-slate-250 rounded-lg px-3 py-1 font-bold font-sans transition-colors text-[11px]">
+                    <Link to="/login" className="bg-white text-brand-teal hover:bg-brand-teal-light border border-slate-250 rounded-lg px-3 py-1 font-bold font-sans transition-colors text-[11px]">
                       Discuss Project
-                    </a>
+                    </Link>
                   </div>
                 </div>
               ))}

@@ -17,14 +17,17 @@ import {
   Award,
   Coins
 } from "lucide-react";
+import { Routes, Route, Navigate, useLocation, useNavigate, Link } from "react-router-dom";
+import { Suspense, lazy } from "react";
 import Header from "./components/Header.tsx";
-import DeveloperDashboard from "./components/DeveloperDashboard.tsx";
-import RecruiterDashboard from "./components/RecruiterDashboard.tsx";
+const DeveloperDashboard = lazy(() => import("./components/DeveloperDashboard.tsx"));
+const RecruiterDashboard = lazy(() => import("./components/RecruiterDashboard.tsx"));
 import { triggerNewApplicationNotification, triggerProjectStatusChangeNotification } from "./services/emailService.ts";
-import AdminPanel from "./components/AdminPanel.tsx";
-import ChatSystem from "./components/ChatSystem.tsx";
-import LandingPage from "./components/LandingPage.tsx";
+const AdminPanel = lazy(() => import("./components/AdminPanel.tsx"));
+const ChatSystem = lazy(() => import("./components/ChatSystem.tsx"));
+const LandingPage = lazy(() => import("./components/LandingPage.tsx"));
 import ProfileDrawer from "./components/ProfileDrawer.tsx";
+import SEO from "./components/SEO.tsx";
 
 import { 
   User, 
@@ -51,6 +54,9 @@ import {
 type WorkspaceTab = "dashboard" | "projects" | "scout" | "chats" | "disputes" | "supabase" | "faq";
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [devProfile, setDevProfile] = useState<DeveloperProfile | null>(null);
   const [recProfile, setRecProfile] = useState<RecruiterProfile | null>(null);
@@ -75,8 +81,8 @@ export default function App() {
   const [selectedHiringTypes, setSelectedHiringTypes] = useState<string[]>([]);
   const [selectedBudgetRanges, setSelectedBudgetRanges] = useState<string[]>([]);
 
-  // Navigation tab
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("dashboard");
+  // Navigation tab (derived from URL)
+  const activeTab = (location.pathname.split("/")[1] || "dashboard") as WorkspaceTab;
   const [isLoading, setIsLoading] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
@@ -173,6 +179,15 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Handle legacy hash redirects
+  useEffect(() => {
+    if (window.location.hash === "#auth-section" || window.location.hash === "#login") {
+      navigate("/login", { replace: true });
+    } else if (window.location.hash === "#signup") {
+      navigate("/signup", { replace: true });
+    }
+  }, [navigate]);
+
   // Character switch handler
   const handleSwitchSession = async (userId: string) => {
     setIsLoading(true);
@@ -182,7 +197,7 @@ export default function App() {
       body: JSON.stringify({ userId })
     });
     await fetchData();
-    setActiveTab("dashboard");
+    navigate("/dashboard");
   };
 
   const handleLogout = async () => {
@@ -191,6 +206,7 @@ export default function App() {
       method: "POST"
     });
     await fetchData();
+    navigate("/");
   };
 
   const handleUpdateProfile = async (profile: Partial<DeveloperProfile | RecruiterProfile>) => {
@@ -319,7 +335,7 @@ export default function App() {
     if (parsed?.chat?.id) {
       setSelectedChatId(parsed.chat.id);
     }
-    setActiveTab("chats");
+    navigate("/chats");
   };
 
   const handleApplyToProject = async (projectId: string, cover: string, proposedRate: number, avail: string, timeline: string) => {
@@ -418,7 +434,7 @@ export default function App() {
     if (chatData?.chat?.id) {
       setSelectedChatId(chatData.chat.id);
     }
-    setActiveTab("chats");
+    navigate("/chats");
   };
 
   const handleSendContactRequest = async (developerId: string) => {
@@ -563,11 +579,51 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <LandingPage 
-        projectsList={projects} 
-        usersList={allUsers} 
-        onLoginSuccess={fetchData} 
-      />
+      <Suspense fallback={
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-800 flex-col gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-brand-teal border-t-transparent animate-spin"></div>
+          <p className="font-mono text-xs text-brand-teal-dark font-semibold tracking-wide">LOADING COMPONENT...</p>
+        </div>
+      }>
+        <Routes>
+          <Route path="/login" element={
+            <>
+              <SEO title="Login | DeveloperConnect" description="Access your DeveloperConnect account to hire or find developer jobs." />
+              <LandingPage projectsList={projects} usersList={allUsers} onLoginSuccess={fetchData} initialTab="login" />
+            </>
+          } />
+          <Route path="/signup" element={
+            <>
+              <SEO title="Sign Up | DeveloperConnect" description="Create an account on DeveloperConnect to start hiring or getting hired." />
+              <LandingPage projectsList={projects} usersList={allUsers} onLoginSuccess={fetchData} initialTab="signup" />
+            </>
+          } />
+          <Route path="/projects" element={
+            <>
+              <SEO title="Browse Projects | DeveloperConnect" description="Explore high-paying tech contracts and remote developer jobs in India." />
+              <LandingPage projectsList={projects} usersList={allUsers} onLoginSuccess={fetchData} />
+            </>
+          } />
+          <Route path="/scout" element={
+            <>
+              <SEO title="Hire Vetted Developers | DeveloperConnect" description="Find and hire the top 1% of Indian software engineers and remote talent." />
+              <LandingPage projectsList={projects} usersList={allUsers} onLoginSuccess={fetchData} />
+            </>
+          } />
+          <Route path="/faq" element={
+            <>
+              <SEO title="Compliance & FAQ | DeveloperConnect" description="Learn about platform policies, Indian IT Act compliance, and developer wage standards." />
+              <LandingPage projectsList={projects} usersList={allUsers} onLoginSuccess={fetchData} />
+            </>
+          } />
+          <Route path="*" element={
+            <>
+              <SEO />
+              <LandingPage projectsList={projects} usersList={allUsers} onLoginSuccess={fetchData} />
+            </>
+          } />
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -618,9 +674,9 @@ export default function App() {
             ).map((tab) => {
               const Icon = tab.icon;
               return (
-                <button
+                <Link
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as WorkspaceTab)}
+                  to={`/${tab.id}`}
                   className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all cursor-pointer ${
                     activeTab === tab.id 
                       ? "bg-brand-teal-light text-brand-teal-dark border border-brand-teal/20 shadow-sm font-bold" 
@@ -629,7 +685,7 @@ export default function App() {
                 >
                   <Icon className="w-4 h-4" />
                   <span className="text-xs font-semibold uppercase tracking-wide">{tab.label}</span>
-                </button>
+                </Link>
               );
             })}
           </nav>
@@ -655,7 +711,7 @@ export default function App() {
             </label>
             <select 
               value={activeTab} 
-              onChange={(e) => setActiveTab(e.target.value as WorkspaceTab)}
+              onChange={(e) => navigate("/" + e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-bold uppercase tracking-wider text-emerald-300 focus:outline-none cursor-pointer shadow-inner font-mono"
             >
               {currentUser.role === UserRole.ADMIN ? (
@@ -677,83 +733,97 @@ export default function App() {
             </select>
           </div>
 
-          {/* DASHBOARD TAB */}
-          {activeTab === "dashboard" && (
-            <div>
-              {currentUser.role === UserRole.DEVELOPER && devProfile && (
-                <DeveloperDashboard 
-                  currentUser={currentUser}
-                  devProfile={devProfile}
-                  projects={projects}
-                  applications={applications}
-                  invites={invites}
-                  contactRequests={contactRequests}
-                  projectStages={projectStages}
-                  ndas={ndas}
-                  reviews={reviews}
-                  onPostReview={handlePostReview}
-                  onApply={handleApplyToProject}
-                  onRespondInvite={handleRespondInvite}
-                  onRespondContact={handleRespondContact}
-                  onUpdateProfile={handleUpdateProfile}
-                  onUpdatePreferences={handleUpdatePreferences}
-                  onInitiateChat={handleInitiateChat}
-                  onCreateStage={handleCreateStage}
-                  onApproveStage={handleApproveStage}
-                  onCompleteStage={handleCompleteStage}
-                  onSignNDA={handleSignNDA}
-                />
-              )}
-
-              {currentUser.role === UserRole.RECRUITER && recProfile && (
-                <RecruiterDashboard 
-                  currentUser={currentUser}
-                  recProfile={recProfile}
-                  projects={projects}
-                  applications={applications}
-                  invites={invites}
-                  contactRequests={contactRequests}
-                  developersList={developersOnly}
-                  projectStages={projectStages}
-                  ndas={ndas}
-                  reviews={reviews}
-                  onPostReview={handlePostReview}
-                  onUpdateProjectStatus={handleUpdateProjectStatus}
-                  onPostProject={handlePostProject}
-                  onInviteDeveloper={handleInviteDeveloper}
-                  onUpdateApplicationStatus={handleUpdateApplicationStatus}
-                  onSendContactRequest={handleSendContactRequest}
-                  onUpdatePreferences={handleUpdatePreferences}
-                  onInitiateChat={handleInitiateChat}
-                  onUpdateProfile={handleUpdateProfile}
-                  onCreateStage={handleCreateStage}
-                  onApproveStage={handleApproveStage}
-                  onCompleteStage={handleCompleteStage}
-                  onSendNDA={handleSendNDA}
-                  onSignNDA={handleSignNDA}
-                  onQuickHire={handleQuickHire}
-                />
-              )}
-
-              {currentUser.role === UserRole.ADMIN && (
-                <AdminPanel 
-                  currentUser={currentUser}
-                  usersList={allUsers}
-                  disputes={disputes}
-                  projects={projects}
-                  applications={applications}
-                  onUpdateUser={handleUpdateUserStatus}
-                  onDeleteUser={handleDeleteUser}
-                  onEditUserProfile={handleEditUserProfile}
-                  onResolveDispute={handleResolveDispute}
-                  onUpdatePreferences={handleUpdatePreferences}
-                />
-              )}
+          <Suspense fallback={
+            <div className="bg-white border border-slate-200 rounded-2xl p-12 shadow-sm flex flex-col items-center justify-center gap-4">
+              <div className="w-10 h-10 rounded-full border-4 border-brand-teal border-t-transparent animate-spin"></div>
+              <p className="text-xs font-mono font-bold text-brand-teal uppercase tracking-widest">INITIALIZING MODULE...</p>
             </div>
-          )}
+          }>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-          {/* PROJECTS BOARD TAB (Global Browsing View) */}
-          {activeTab === "projects" && (() => {
+            {/* DASHBOARD TAB */}
+            <Route path="/dashboard" element={
+              <div>
+                <SEO title="Dashboard | DeveloperConnect" description="Manage your projects, applications, and profile on DeveloperConnect." />
+                {currentUser.role === UserRole.DEVELOPER && devProfile && (
+                  <DeveloperDashboard
+                    currentUser={currentUser}
+                    devProfile={devProfile}
+                    projects={projects}
+                    applications={applications}
+                    invites={invites}
+                    contactRequests={contactRequests}
+                    projectStages={projectStages}
+                    ndas={ndas}
+                    reviews={reviews}
+                    onPostReview={handlePostReview}
+                    onApply={handleApplyToProject}
+                    onRespondInvite={handleRespondInvite}
+                    onRespondContact={handleRespondContact}
+                    onUpdateProfile={handleUpdateProfile}
+                    onUpdatePreferences={handleUpdatePreferences}
+                    onInitiateChat={handleInitiateChat}
+                    onCreateStage={handleCreateStage}
+                    onApproveStage={handleApproveStage}
+                    onCompleteStage={handleCompleteStage}
+                    onSignNDA={handleSignNDA}
+                  />
+                )}
+
+                {currentUser.role === UserRole.RECRUITER && recProfile && (
+                  <RecruiterDashboard
+                    currentUser={currentUser}
+                    recProfile={recProfile}
+                    projects={projects}
+                    applications={applications}
+                    invites={invites}
+                    contactRequests={contactRequests}
+                    developersList={developersOnly}
+                    projectStages={projectStages}
+                    ndas={ndas}
+                    reviews={reviews}
+                    onPostReview={handlePostReview}
+                    onUpdateProjectStatus={handleUpdateProjectStatus}
+                    onPostProject={handlePostProject}
+                    onInviteDeveloper={handleInviteDeveloper}
+                    onUpdateApplicationStatus={handleUpdateApplicationStatus}
+                    onSendContactRequest={handleSendContactRequest}
+                    onUpdatePreferences={handleUpdatePreferences}
+                    onInitiateChat={handleInitiateChat}
+                    onUpdateProfile={handleUpdateProfile}
+                    onCreateStage={handleCreateStage}
+                    onApproveStage={handleApproveStage}
+                    onCompleteStage={handleCompleteStage}
+                    onSendNDA={handleSendNDA}
+                    onSignNDA={handleSignNDA}
+                    onQuickHire={handleQuickHire}
+                  />
+                )}
+
+                {currentUser.role === UserRole.ADMIN && (
+                  <AdminPanel
+                    currentUser={currentUser}
+                    usersList={allUsers}
+                    disputes={disputes}
+                    projects={projects}
+                    applications={applications}
+                    onUpdateUser={handleUpdateUserStatus}
+                    onDeleteUser={handleDeleteUser}
+                    onEditUserProfile={handleEditUserProfile}
+                    onResolveDispute={handleResolveDispute}
+                    onUpdatePreferences={handleUpdatePreferences}
+                  />
+                )}
+              </div>
+            } />
+
+            {/* PROJECTS BOARD TAB (Global Browsing View) */}
+            <Route path="/projects" element={(() => {
+              return (
+                <>
+                  <SEO title="Browse Projects | DeveloperConnect" description="Explore high-paying tech contracts and remote developer jobs in India." />
+                  {(() => {
             const BUDGET_RANGES = [
               { id: "under-50k", label: "Under ₹50,000", min: 0, max: 50000 },
               { id: "50k-200k", label: "₹50,000 - ₹2,00,000", min: 50000, max: 200000 },
@@ -941,79 +1011,88 @@ export default function App() {
                 </div>
               </div>
             );
-          })()}
+                  })()}
+                </>
+              );
+            })()} />
 
-          {/* SCOUT TEAM TALENT POOL TAB */}
-          {activeTab === "scout" && (
-            <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                <h3 className="text-base font-bold text-slate-900 font-sans">Browse Vetted Engineering Talents</h3>
-                <p className="text-xs text-slate-500">Search for specialized engineers, evaluate coding capabilities and contact access profiles.</p>
+            {/* SCOUT TEAM TALENT POOL TAB */}
+            <Route path="/scout" element={
+              <div className="space-y-6">
+                <SEO title="Hire Vetted Developers | DeveloperConnect" description="Find and hire the top 1% of Indian software engineers and remote talent." />
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-base font-bold text-slate-900 font-sans">Browse Vetted Engineering Talents</h3>
+                  <p className="text-xs text-slate-500">Search for specialized engineers, evaluate coding capabilities and contact access profiles.</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                  {developersOnly.map((dev) => (
-                    <div key={dev.userId} className="bg-slate-50/40 p-5 rounded-xl border border-slate-200/85 flex flex-col justify-between hover:border-brand-teal/30 hover:bg-white hover:shadow-sm transition-all">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <img 
-                            className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                            src={dev.avatarUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuAE1SMwdmyLIju7Ox7ppeEf0bl2ZA-kl8JU9liRcngr4ZoDtexxBK1OisNtbfLpMGyIXBEAVWMPzKZPx0-HrR4-sc65L1bMNsyn7y_WBE1H568KCIwG1AO8A2MZV9il0fc_D7X_Ev6pDqYMUihIj4OT62yi9DAa8yCMKYQNiq0s_u_nUwzJY8b4v5W53KM-quuT0B4kk-HH0vyn-El7WW8IkxIU_bfe5c1sO71QxMpXmG3-0wHWnTcrh5x7TisEuZdpp5D2drNHukU"} 
-                            alt={dev.fullName} 
-                          />
-                          <div>
-                            <h4 className="text-sm font-bold text-slate-909">{dev.fullName}</h4>
-                            <p className="text-[10px] text-brand-teal-dark font-medium font-semibold">{dev.headline}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    {developersOnly.map((dev) => (
+                      <div key={dev.userId} className="bg-slate-50/40 p-5 rounded-xl border border-slate-200/85 flex flex-col justify-between hover:border-brand-teal/30 hover:bg-white hover:shadow-sm transition-all">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                              src={dev.avatarUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuAE1SMwdmyLIju7Ox7ppeEf0bl2ZA-kl8JU9liRcngr4ZoDtexxBK1OisNtbfLpMGyIXBEAVWMPzKZPx0-HrR4-sc65L1bMNsyn7y_WBE1H568KCIwG1AO8A2MZV9il0fc_D7X_Ev6pDqYMUihIj4OT62yi9DAa8yCMKYQNiq0s_u_nUwzJY8b4v5W53KM-quuT0B4kk-HH0vyn-El7WW8IkxIU_bfe5c1sO71QxMpXmG3-0wHWnTcrh5x7TisEuZdpp5D2drNHukU"}
+                              alt={dev.fullName}
+                            loading="lazy"
+                            />
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-909">{dev.fullName}</h4>
+                              <p className="text-[10px] text-brand-teal-dark font-medium font-semibold">{dev.headline}</p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{dev.bio}</p>
+
+                          <div className="flex flex-wrap gap-1">
+                            {dev.skills.map(s => (
+                              <span key={s} className="bg-white text-brand-teal text-[9px] px-2 py-0.5 rounded font-mono border border-slate-200">
+                                {s}
+                              </span>
+                            ))}
                           </div>
                         </div>
-                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{dev.bio}</p>
-                        
-                        <div className="flex flex-wrap gap-1">
-                          {dev.skills.map(s => (
-                            <span key={s} className="bg-white text-brand-teal text-[9px] px-2 py-0.5 rounded font-mono border border-slate-200">
-                              {s}
-                            </span>
-                          ))}
+
+                        <div className="pt-4 border-t border-slate-200 mt-4 flex items-center justify-between text-xs text-slate-500">
+                          <span>Min Rate: ₹{dev.rates.hourly.toLocaleString()}/hr</span>
+                          {currentUser.role === UserRole.RECRUITER ? (
+                            <button
+                              onClick={() => handleInitiateChat(currentUser.id, dev.userId)}
+                              className="text-brand-teal font-bold hover:text-brand-teal-dark transition-colors cursor-pointer"
+                            >
+                              Open Discussion
+                            </button>
+                          ) : (
+                            <span className="text-slate-400 font-mono text-[10px]">Vetted Premium</span>
+                          )}
                         </div>
                       </div>
-
-                      <div className="pt-4 border-t border-slate-200 mt-4 flex items-center justify-between text-xs text-slate-500">
-                        <span>Min Rate: ₹{dev.rates.hourly.toLocaleString()}/hr</span>
-                        {currentUser.role === UserRole.RECRUITER ? (
-                          <button 
-                            onClick={() => handleInitiateChat(currentUser.id, dev.userId)}
-                            className="text-brand-teal font-bold hover:text-brand-teal-dark transition-colors cursor-pointer"
-                          >
-                            Open Discussion
-                          </button>
-                        ) : (
-                          <span className="text-slate-400 font-mono text-[10px]">Vetted Premium</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            } />
 
-          {/* FRICTIONLESS CHAT TAB */}
-          {activeTab === "chats" && (
-            <ChatSystem 
-              currentUser={currentUser}
-              chats={chats}
-              messages={messages}
-              usersList={allUsers}
-              onSendMessage={handleSendMessage}
-              onInitiateChat={(opId) => handleInitiateChat(currentUser.role === UserRole.RECRUITER ? currentUser.id : opId, currentUser.role === UserRole.DEVELOPER ? currentUser.id : opId)}
-              onToggleKeepOpen={handleToggleKeepOpen}
-              selectedChatId={selectedChatId}
-              onSelectChat={setSelectedChatId}
-            />
-          )}
+            {/* FRICTIONLESS CHAT TAB */}
+            <Route path="/chats" element={
+              <>
+                <SEO title="Messages | DeveloperConnect" description="Secure, frictionless communication between developers and recruiters." />
+                <ChatSystem
+                  currentUser={currentUser}
+                  chats={chats}
+                  messages={messages}
+                  usersList={allUsers}
+                  onSendMessage={handleSendMessage}
+                  onInitiateChat={(opId) => handleInitiateChat(currentUser.role === UserRole.RECRUITER ? currentUser.id : opId, currentUser.role === UserRole.DEVELOPER ? currentUser.id : opId)}
+                  onToggleKeepOpen={handleToggleKeepOpen}
+                  selectedChatId={selectedChatId}
+                  onSelectChat={setSelectedChatId}
+                />
+              </>
+            } />
 
-          {/* ARBITRATION MEDIATOR DISPUTES TAB */}
-          {activeTab === "disputes" && (
-            <div className="space-y-6">
+            {/* ARBITRATION MEDIATOR DISPUTES TAB */}
+            <Route path="/disputes" element={
+              <div className="space-y-6">
+                <SEO title="Dispute Resolution | DeveloperConnect" description="Official intermediary dispute resolution for tech contracts." />
               {/* Creator form for developers and recruiters */}
               <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-sm">
                 <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
@@ -1120,13 +1199,14 @@ export default function App() {
                     ))
                   )}
                 </div>
+                </div>
               </div>
-            </div>
-          )}
+            } />
 
-          {/* SUPABASE DEPLOYMENT & DATABASE PANEL */}
-          {activeTab === "supabase" && (
-            <div className="space-y-6 text-slate-800">
+            {/* SUPABASE DEPLOYMENT & DATABASE PANEL */}
+            <Route path="/supabase" element={
+              <div className="space-y-6 text-slate-800">
+                <SEO title="Database Sync | DeveloperConnect Admin" description="Supabase PostgreSQL sync and database health monitoring." />
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4 font-sans text-left">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-4">
                   <div>
@@ -1227,12 +1307,13 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+              </div>
+            } />
 
-          {/* KNOWLEDGE HUB / FAQ TAB */}
-          {activeTab === "faq" && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6 text-slate-800 shadow-sm">
+            {/* KNOWLEDGE HUB / FAQ TAB */}
+            <Route path="/faq" element={
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6 text-slate-800 shadow-sm">
+                <SEO title="Compliance & FAQ | DeveloperConnect" description="Learn about platform policies, Indian IT Act compliance, and developer wage standards." />
               <div>
                 <h2 className="text-base font-bold text-slate-900">Compliance & Knowledge Hub</h2>
                 <p className="text-xs text-slate-500">Review Indian IT regulations and platform minimum wage guarantees.</p>
@@ -1266,9 +1347,12 @@ export default function App() {
                   </p>
                 </div>
               </div>
-            </div>
-          )}
+              </div>
+            } />
 
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+          </Suspense>
         </section>
       </div>
 
