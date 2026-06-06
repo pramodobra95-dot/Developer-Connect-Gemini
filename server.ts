@@ -79,178 +79,31 @@ if (geminiApiKey) {
 }
 
 // ----------------------------------------------------
-// Mock Databases
+// Persistent Database Stores (Hydrated from Supabase)
 // ----------------------------------------------------
 let currentUserId = ""; // Default session user empty (no active logged in session)
 
-let users: any[] = [
+let users: any[] = [];
+let developerProfiles: Record<string, DeveloperProfile> = {};
+let recruiterProfiles: Record<string, RecruiterProfile> = {};
+let projects: Project[] = [];
+let applications: Application[] = [];
+let invites: Invite[] = [];
+let contactAccessRequests: ContactAccessRequest[] = [];
+let chats: Chat[] = [];
+let messages: Message[] = [];
+let disputes: Dispute[] = [];
+let projectStages: ProjectStage[] = [];
+let ndas: NDA[] = [];
+let notifications: Notification[] = [];
+let reviews: Review[] = [];
+
+// Seed premium defaults if needed
+const premiumUsers = [
   { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } },
   { id: "user-dev1", email: "priya.sharma@outstaff.io", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2025-01-10T08:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
-  { id: "user-dev2", email: "amit.patel@outstaff.io", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2025-01-12T09:30:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
-  { id: "user-dev3", email: "rohan.das@techspace.in", role: UserRole.DEVELOPER, isVerified: false, isSuspended: false, createdAt: "2025-01-15T14:20:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
-  { id: "user-rec1", email: "talent@capitalone.in", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2025-01-05T10:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
-  { id: "user-rec2", email: "hiring@innovate.co", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2025-01-08T11:15:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } }
+  { id: "user-rec1", email: "talent@capitalone.in", role: UserRole.RECRUITER, isVerified: true, isSuspended: false, createdAt: "2025-01-05T10:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } }
 ];
-
-let developerProfiles: Record<string, DeveloperProfile> = {
-  "user-dev1": {
-    userId: "user-dev1",
-    fullName: "Priya Sharma",
-    headline: "Lead Full-Stack Systems Engineer",
-    bio: "Passionate full-stack systems engineer with 6+ years of expertise constructing responsive React architectures and resilient Node.js backends. Specializes in real-time syncing pipelines and AWS optimization.",
-    skills: ["React", "TypeScript", "Node.js", "Express", "PostgreSQL", "Tailwind CSS"],
-    techStack: ["React", "TypeScript", "Node.js", "Tailwind CSS"],
-    experienceYears: 6,
-    availability: "Both",
-    rates: { hourly: 850, weekly: 32000, monthly: 120000, projectMin: 15000 },
-    location: "Bengaluru, India",
-    socials: { github: "github.com/priya-sharma", linkedin: "linkedin.com/in/priya-sharma" },
-    isContactVisible: true,
-    phoneNumber: "+91 98765 43210",
-    email: "priya.sharma@outstaff.io",
-    status: "Available for contract",
-    avatarUrl: "https://api.dicebear.com/7.x/adventurer/svg?seed=Priya",
-    analytics: { profileViews: 142, invitesCount: 18, applicationsSent: 12, acceptedProjects: 4 }
-  },
-  "user-dev2": {
-    userId: "user-dev2",
-    fullName: "Amit Patel",
-    headline: "Senior DevOps & Cloud Infrastructure Lead",
-    bio: "Ex-Infosys cloud infrastructure architect. Specialist in Docker containers orchestration, Kubernetes deployments, secure SSH configurations, and designing robust secure networks on AWS & GCP.",
-    skills: ["Docker", "Kubernetes", "AWS", "Bash", "Terraform", "CI/CD", "Security Audit"],
-    techStack: ["Docker", "AWS", "CI/CD"],
-    experienceYears: 8,
-    availability: "Both",
-    rates: { hourly: 950, weekly: 36000, monthly: 140000, projectMin: 20000 },
-    location: "Mumbai, India",
-    socials: { github: "github.com/amit-patel", linkedin: "linkedin.com/in/amit-patel" },
-    isContactVisible: false,
-    phoneNumber: "+91 87654 32109",
-    email: "amit.patel@outstaff.io",
-    status: "Available, looking for premium roles",
-    avatarUrl: "https://api.dicebear.com/7.x/adventurer/svg?seed=Amit",
-    analytics: { profileViews: 98, invitesCount: 22, applicationsSent: 8, acceptedProjects: 2 }
-  },
-  "user-dev3": {
-    userId: "user-dev3",
-    fullName: "Rohan Das",
-    headline: "Frontend React Developer",
-    bio: "Energetic frontend developer building pixel-perfect responsive user interfaces. Highly proficient with modern Tailwind styles, motion transitions, and React hooks state optimization.",
-    skills: ["React", "TypeScript", "Tailwind CSS", "motion", "JavaScript", "HTML5"],
-    techStack: ["React", "Tailwind CSS"],
-    experienceYears: 3,
-    availability: "Both",
-    rates: { hourly: 550, weekly: 20000, monthly: 75000, projectMin: 5000 },
-    location: "Kolkata, India",
-    socials: { github: "github.com/rohan-das" },
-    isContactVisible: false,
-    phoneNumber: "+91 76543 21098",
-    email: "rohan.das@techspace.in",
-    status: "Actively seeking opportunities",
-    avatarUrl: "https://api.dicebear.com/7.x/adventurer/svg?seed=Rohan",
-    analytics: { profileViews: 45, invitesCount: 4, applicationsSent: 15, acceptedProjects: 1 }
-  }
-};
-
-let recruiterProfiles: Record<string, RecruiterProfile> = {
-  "user-rec1": {
-    userId: "user-rec1",
-    companyName: "Capital One India IT",
-    companyLogoUrl: "",
-    website: "https://capitalone.in",
-    industry: "Financial Technology",
-    companySize: "501-1000",
-    aboutCompany: "Leading next-generation consumer lending and digital credit platform operating major technical hubs across Bangalore and Hyderabad.",
-    fullName: "Divya Nair",
-    phone: "+91 76543 21098",
-    avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Capital"
-  },
-  "user-rec2": {
-    userId: "user-rec2",
-    companyName: "Innovate.co",
-    companyLogoUrl: "",
-    website: "https://innovate.co",
-    industry: "Information Technology",
-    companySize: "11-50",
-    aboutCompany: "Venture-backed high performance web incubator assisting agile early-stage developers build production-ready software systems under Section 72 IT compliance.",
-    fullName: "Vikram Sen",
-    phone: "+91 65432 10987",
-    avatarUrl: "https://api.dicebear.com/7.x/identicon/svg?seed=Innovate"
-  }
-};
-
-let projects: Project[] = [
-  {
-    id: "proj-1",
-    recruiterId: "user-rec1",
-    title: "Secure FinTech Unified Ledger Pipeline System",
-    description: "Construct a highly secure transaction processing pipeline complying with standard audit regulations. The engineering system requires robust database transaction isolation, Redis caching, and Node/Express backend layers.",
-    techStack: ["Node.js", "Express", "PostgreSQL", "Redis"],
-    budget: 450000,
-    hiringType: HiringType.CONTRACT,
-    workMode: WorkMode.REMOTE,
-    duration: "3 months",
-    status: ProjectStatus.OPEN,
-    createdAt: "2025-01-15T10:00:00Z",
-    aiSuggestedMetrics: {
-      suggestedTech: ["PostgreSQL", "Redis"],
-      recommendedRoles: ["Backend Engineer", "Security Lead"],
-      confidence: 92,
-      estimatedDays: 90
-    }
-  },
-  {
-    id: "proj-2",
-    recruiterId: "user-rec2",
-    title: "Tailwind React SaaS Admin Framework Refactoring",
-    description: "Refactor a legacy UI dashboards application into an elegant React 18 frontend with pixel-perfect responsive styling, structured Tailwind classes, and beautiful micro-animations using motion.",
-    techStack: ["React", "TypeScript", "Tailwind CSS", "motion"],
-    budget: 120000,
-    hiringType: HiringType.FIXED_PRICE,
-    workMode: WorkMode.HYBRID,
-    duration: "1 month",
-    status: ProjectStatus.OPEN,
-    createdAt: "2025-01-18T11:00:00Z",
-    aiSuggestedMetrics: {
-      suggestedTech: ["React", "Tailwind CSS"],
-      recommendedRoles: ["Frontend Specialist"],
-      confidence: 88,
-      estimatedDays: 30
-    }
-  }
-];
-
-let applications: Application[] = [
-  {
-    id: "app-seed-1",
-    projectId: "proj-1",
-    developerId: "user-dev1",
-    coverLetter: "I have multiple years of back-end banking engineering knowledge, implementing custom secure REST and RPC end-points. I would love to tackle this transaction isolated logic immediately.",
-    proposedRate: 850,
-    availability: "Both",
-    timelineEstimate: "3 months",
-    status: ApplicationStatus.PENDING,
-    createdAt: "2025-01-16T10:30:00Z"
-  }
-];
-
-let invites: Invite[] = [];
-
-let contactAccessRequests: ContactAccessRequest[] = [];
-
-let chats: Chat[] = [];
-
-let messages: Message[] = [];
-
-let disputes: Dispute[] = [];
-
-let projectStages: ProjectStage[] = [];
-
-let ndas: NDA[] = [];
-
-let notifications: Notification[] = [];
-
-let reviews: Review[] = [];
 
 // Helper to push admin notifications
 function addAdminNotification(title: string, desc: string) {
@@ -280,20 +133,8 @@ async function seedPremiumData() {
   if (!isSupabaseConfigured()) return;
   console.log("🌱 Database is empty. Seeding premium default user base and developer portfolios to Supabase...");
   try {
-    for (const u of users) {
+    for (const u of premiumUsers) {
       await dbSaveUser(u);
-    }
-    for (const key in developerProfiles) {
-      await dbSaveDeveloperProfile(key, developerProfiles[key]);
-    }
-    for (const key in recruiterProfiles) {
-      await dbSaveRecruiterProfile(key, recruiterProfiles[key]);
-    }
-    for (const proj of projects) {
-      await dbSaveProject(proj);
-    }
-    for (const app of applications) {
-      await dbSaveApplication(app);
     }
     console.log("✨ Seed successfully written to Supabase.");
   } catch (err: any) {
@@ -1074,9 +915,21 @@ async function startServer() {
     res.json(projects);
   });
 
-  app.post("/api/projects", (req, res) => {
+  app.post("/api/projects", async (req, res) => {
     const currentUserId = (req as any).currentUserId;
-    const { title, description, techStack, budget, hiringType, workMode, duration, aiMetrics } = req.body;
+    const { title, description, techStack, budget, hiringType, workMode, duration, aiMetrics, attachments } = req.body;
+
+    let processedAttachments = attachments;
+    if (Array.isArray(attachments)) {
+      processedAttachments = await Promise.all(attachments.map(async (file: any, index: number) => {
+        if (file.url && file.url.startsWith("data:")) {
+          const url = await dbUploadFile(file.url, file.name || `project_file_${index}`, "project-files");
+          return { ...file, url };
+        }
+        return file;
+      }));
+    }
+
     const id = "proj-" + Math.random().toString(36).substring(2, 9);
     const newProject: Project = {
       id,
@@ -1093,6 +946,7 @@ async function startServer() {
       aiSuggestedMetrics: aiMetrics || null
     };
 
+    (newProject as any).attachments = processedAttachments;
     projects.push(newProject);
     syncProject(newProject);
     addAdminNotification("New Project Posted", `A project titled "${title}" has been launched.`);
@@ -1441,6 +1295,14 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   app.post("/api/profile/developer", async (req, res) => {
     const currentUserId = (req as any).currentUserId;
     const profile = req.body;
+
+    if (profile.avatarUrl && profile.avatarUrl.startsWith("data:")) {
+      profile.avatarUrl = await dbUploadFile(profile.avatarUrl, `avatar_${currentUserId}.png`, "avatars");
+    }
+    if (profile.resumeUrl && profile.resumeUrl.startsWith("data:")) {
+      profile.resumeUrl = await dbUploadFile(profile.resumeUrl, `resume_${currentUserId}.pdf`, "resumes");
+    }
+
     developerProfiles[currentUserId] = {
       ...developerProfiles[currentUserId],
       ...profile,
@@ -1453,6 +1315,14 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   app.post("/api/profile/recruiter", async (req, res) => {
     const currentUserId = (req as any).currentUserId;
     const profile = req.body;
+
+    if (profile.avatarUrl && profile.avatarUrl.startsWith("data:")) {
+      profile.avatarUrl = await dbUploadFile(profile.avatarUrl, `rec_avatar_${currentUserId}.png`, "avatars");
+    }
+    if (profile.companyLogoUrl && profile.companyLogoUrl.startsWith("data:")) {
+      profile.companyLogoUrl = await dbUploadFile(profile.companyLogoUrl, `logo_${currentUserId}.png`, "company-logos");
+    }
+
     recruiterProfiles[currentUserId] = {
       ...recruiterProfiles[currentUserId],
       ...profile,
@@ -1584,7 +1454,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
     let processedFileUrl = fileUrl;
     if (fileUrl && fileUrl.startsWith("data:")) {
       const defaultFileName = fileType === "image" ? "image.png" : "file.bin";
-      processedFileUrl = await dbUploadFile(fileUrl, defaultFileName);
+      processedFileUrl = await dbUploadFile(fileUrl, defaultFileName, "chat-attachments");
     }
 
     const id = "msg-" + Math.random().toString(36).substring(2, 9);
