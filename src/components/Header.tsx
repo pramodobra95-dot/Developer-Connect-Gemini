@@ -22,6 +22,7 @@ interface HeaderProps {
   notifications: any[];
   onMarkNotificationsRead: () => void;
   onLogout?: () => void;
+  onEditProfile?: () => void;
 }
 
 export default function Header({ 
@@ -30,7 +31,8 @@ export default function Header({
   usersList, 
   notifications,
   onMarkNotificationsRead,
-  onLogout
+  onLogout,
+  onEditProfile
 }: HeaderProps) {
   const [showSessionSelector, setShowSessionSelector] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -104,7 +106,11 @@ export default function Header({
           </div>
 
           {/* User Profile Capsule */}
-          <div className="flex items-center gap-3">
+          <div 
+            onClick={() => currentUser.role !== UserRole.ADMIN && onEditProfile?.()}
+            title={currentUser.role === UserRole.ADMIN ? "Admin Supervisor" : "Open Settings & Profile Editor"}
+            className={`flex items-center gap-3 transition-all ${currentUser.role !== UserRole.ADMIN ? 'cursor-pointer hover:opacity-80 active:scale-98' : ''}`}
+          >
             <div className="text-right hidden md:block">
               <p className="text-xs font-bold text-slate-950">
                 {currentUser.role === UserRole.ADMIN 

@@ -22,7 +22,9 @@ import {
   ChevronRight,
   ShieldCheck,
   CheckCircle,
-  MessageSquare
+  MessageSquare,
+  Menu,
+  X
 } from "lucide-react";
 import { UserRole } from "../types.js";
 import Logo from "./Logo.tsx";
@@ -52,6 +54,18 @@ export default function LandingPage({
   const [bioOrAbout, setBioOrAbout] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Password State variables
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Forgot Password State Variables
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [simulatedPin, setSimulatedPin] = useState("");
+  const [authWorkflow, setAuthWorkflow] = useState<"auth" | "forgot" | "reset">("auth");
 
   // Google Authentication State
   const [showGoogleModal, setShowGoogleModal] = useState(false);
@@ -151,6 +165,74 @@ export default function LandingPage({
   // Filter developers
   const demoDevs = usersList.filter(u => u.role === "DEVELOPER" && u.devProfile).map(u => u.devProfile);
 
+  const handleForgotPasswordRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+    setSimulatedPin("");
+
+    if (!forgotEmail) {
+      setErrorMessage("Please enter your registered email address.");
+      return;
+    }
+
+    try {
+      const resp = await fetch("/api/session/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setSimulatedPin(data.code || "");
+        setSuccessMessage(`Simulated delivery successful. Your temporary security reset PIN is: ${data.code}`);
+        setAuthWorkflow("reset");
+      } else {
+        setErrorMessage(data.error || "Failed to generate security code request.");
+      }
+    } catch {
+      setErrorMessage("Network error occurred requesting forgot password.");
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!forgotEmail || !resetCode || !newPassword) {
+      setErrorMessage("Please fill out all fields.");
+      return;
+    }
+
+    try {
+      const resp = await fetch("/api/session/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: forgotEmail,
+          code: resetCode,
+          newPassword: newPassword
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setSuccessMessage("Your password was updated successfully! Password reset completed.");
+        setEmail(forgotEmail);
+        setPassword(newPassword);
+        
+        setTimeout(() => {
+          setAuthWorkflow("auth");
+          setActiveTab("login");
+        }, 1500);
+      } else {
+        setErrorMessage(data.error || "Unable to reset password.");
+      }
+    } catch {
+      setErrorMessage("Network error during password reset verification.");
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent, guestEmail?: string) => {
     if (e) e.preventDefault();
     setErrorMessage("");
@@ -166,7 +248,7 @@ export default function LandingPage({
       const resp = await fetch("/api/session/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail })
+        body: JSON.stringify({ email: targetEmail, password })
       });
       const data = await resp.json();
       if (resp.ok) {
@@ -206,7 +288,8 @@ export default function LandingPage({
       headline: selectedRole === "DEVELOPER" ? headline : undefined,
       industry: selectedRole === "RECRUITER" ? industry : undefined,
       bio: selectedRole === "DEVELOPER" ? bioOrAbout : undefined,
-      aboutCompany: selectedRole === "RECRUITER" ? bioOrAbout : undefined
+      aboutCompany: selectedRole === "RECRUITER" ? bioOrAbout : undefined,
+      password: password || undefined
     };
 
     try {
@@ -252,6 +335,7 @@ export default function LandingPage({
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <Logo variant="dark" />
 
+          {/* Desktop Navigation Links */}
           <div className="hidden lg:flex items-center gap-6 text-xs font-semibold text-slate-600 uppercase tracking-wide">
             <a href="#about" className="hover:text-brand-teal transition-colors">About Us</a>
             <a href="#profiles" className="hover:text-brand-teal transition-colors">Developer Pool</a>
@@ -261,21 +345,93 @@ export default function LandingPage({
           </div>
 
           <div className="flex items-center gap-2">
-            <a 
-              href="#auth-section" 
-              className="bg-brand-teal-light text-brand-teal-dark text-xs px-4 py-2 rounded-xl font-bold hover:bg-brand-teal/10 transition-colors border border-brand-teal/20"
+            {/* Desktop Action Buttons */}
+            <div className="hidden sm:flex items-center gap-2">
+              <a 
+                href="#auth-section" 
+                className="bg-brand-teal-light text-brand-teal-dark text-xs px-4 py-2 rounded-xl font-bold hover:bg-brand-teal/10 transition-colors border border-brand-teal/20"
+              >
+                Sign In
+              </a>
+              <a 
+                href="#auth-section" 
+                onClick={() => setActiveTab("signup")} 
+                className="bg-brand-teal text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-brand-teal-dark transition-all shadow-sm"
+              >
+                Register
+              </a>
+            </div>
+
+            {/* Mobile Hamburger toggle */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 text-slate-500 hover:text-slate-900 focus:outline-none transition-colors cursor-pointer"
+              aria-label="Toggle navigation menu"
             >
-              Sign In
-            </a>
-            <a 
-              href="#auth-section" 
-              onClick={() => setActiveTab("signup")} 
-              className="bg-brand-teal text-white text-xs px-4 py-2 rounded-xl font-bold hover:bg-brand-teal-dark transition-all shadow-sm"
-            >
-              Register
-            </a>
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Panel */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-slate-100 bg-white shadow-lg animate-fadeIn">
+            <div className="flex flex-col p-4 space-y-3 font-semibold text-xs text-slate-600 uppercase tracking-wide">
+              <a 
+                href="#about" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2 hover:text-brand-teal transition-colors border-b border-slate-50"
+              >
+                About Us
+              </a>
+              <a 
+                href="#profiles" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2 hover:text-brand-teal transition-colors border-b border-slate-50"
+              >
+                Developer Pool
+              </a>
+              <a 
+                href="#faq" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2 hover:text-brand-teal transition-colors border-b border-slate-50"
+              >
+                Rules & FAQ
+              </a>
+              <a 
+                href="#terms" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2 hover:text-brand-teal transition-colors border-b border-slate-50"
+              >
+                Terms of Work
+              </a>
+              <a 
+                href="#contact" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-2 hover:text-brand-teal transition-colors"
+              >
+                Contact Us
+              </a>
+              
+              <div className="pt-2 flex gap-2 sm:hidden border-t border-slate-100">
+                <a 
+                  href="#auth-section" 
+                  onClick={() => { setMobileMenuOpen(false); setActiveTab("login"); }}
+                  className="flex-1 text-center bg-brand-teal-light text-brand-teal-dark text-xs py-2.5 rounded-xl font-bold border border-brand-teal/20"
+                >
+                  Sign In
+                </a>
+                <a 
+                  href="#auth-section" 
+                  onClick={() => { setMobileMenuOpen(false); setActiveTab("signup"); }}
+                  className="flex-1 text-center bg-brand-teal text-white text-xs py-2.5 rounded-xl font-bold"
+                >
+                  Register
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* IMPERIAL HERO SECTION */}
@@ -357,71 +513,108 @@ export default function LandingPage({
 
           {/* DYNAMIC LANDING LOGIN/SIGNUP CARD */}
           <div id="auth-section" className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 lg:p-8 space-y-6 relative">
-            <div className="flex border-b border-slate-100">
-              <button
-                onClick={() => { setActiveTab("login"); setErrorMessage(""); setSuccessMessage(""); }}
-                className={`flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  activeTab === "login" 
-                    ? "border-b-2 border-brand-teal text-brand-teal" 
-                    : "text-slate-400 hover:text-slate-800"
-                }`}
-              >
-                Login Secure Line
-              </button>
-              <button
-                onClick={() => { setActiveTab("signup"); setErrorMessage(""); setSuccessMessage(""); }}
-                className={`flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                  activeTab === "signup" 
-                    ? "border-b-2 border-brand-teal text-brand-teal" 
-                    : "text-slate-400 hover:text-slate-800"
-                }`}
-              >
-                Sign Up Account
-              </button>
-            </div>
-
-            {errorMessage && (
-              <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200 font-medium">
-                {errorMessage}
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200 font-medium animate-pulse">
-                {successMessage}
-              </div>
-            )}
-
-            {/* LOGIN CHANNEL */}
-            {activeTab === "login" && (
-              <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Account Registered Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@company.com"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all"
-                      required
-                    />
-                  </div>
-                  <div className="pt-1.5">
-                    <p className="hidden text-[10px] text-slate-450 leading-relaxed font-mono">
-                      🔒 <strong className="text-slate-600">Admin Privileges:</strong> Only <strong className="text-brand-teal-dark font-mono">info.bouuz@gmail.com</strong> is authorized to log in as administrator.
-                    </p>
-                  </div>
+            
+            {authWorkflow === "auth" ? (
+              <>
+                <div className="flex border-b border-slate-100">
+                  <button
+                    onClick={() => { setActiveTab("login"); setErrorMessage(""); setSuccessMessage(""); }}
+                    className={`flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                      activeTab === "login" 
+                        ? "border-b-2 border-brand-teal text-brand-teal" 
+                        : "text-slate-400 hover:text-slate-800"
+                    }`}
+                  >
+                    Login Secure Line
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab("signup"); setErrorMessage(""); setSuccessMessage(""); }}
+                    className={`flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                      activeTab === "signup" 
+                        ? "border-b-2 border-brand-teal text-brand-teal" 
+                        : "text-slate-400 hover:text-slate-800"
+                    }`}
+                  >
+                    Sign Up Account
+                  </button>
                 </div>
 
-                <div className="text-right space-y-3">
-                  <button 
-                    type="submit"
-                    className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md shadow-brand-teal/20 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    Authenticate Now <ChevronRight className="w-4 h-4" />
-                  </button>
+                {errorMessage && (
+                  <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200 font-medium animate-pulse">
+                    {errorMessage}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200 font-medium">
+                    {successMessage}
+                  </div>
+                )}
+
+                {/* LOGIN CHANNEL */}
+                {activeTab === "login" && (
+                  <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Account Registered Email</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="name@company.com"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Integrated Password Component */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Enter Password (Optional)</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForgotEmail(email);
+                            setAuthWorkflow("forgot");
+                            setErrorMessage("");
+                            setSuccessMessage("");
+                          }}
+                          className="text-[10px] font-bold text-brand-teal hover:underline cursor-pointer"
+                        >
+                          Forgot Password?
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Password (leave blank if not configured)"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-12 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-3 text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          {showPassword ? "Hide" : "Show"}
+                        </button>
+                      </div>
+                      <p className="text-[9px] text-slate-400 mt-0.5">
+                        💡 Leave blank if you haven't reset/set up a password yet.
+                      </p>
+                    </div>
+
+                    <div className="text-right space-y-3">
+                      <button 
+                        type="submit"
+                        className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md shadow-brand-teal/20 cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        Authenticate Now <ChevronRight className="w-4 h-4" />
+                      </button>
 
                   <div className="relative flex py-1.5 items-center">
                     <div className="flex-grow border-t border-slate-150"></div>
@@ -576,6 +769,27 @@ export default function LandingPage({
                   />
                 </div>
 
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Configure Password (Optional)</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Define account password..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-12 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="space-y-3 text-right">
                   <button
                     type="submit"
@@ -620,6 +834,157 @@ export default function LandingPage({
                       />
                     </svg>
                     Sign Up with Google
+                  </button>
+                </div>
+              </form>
+            )}
+              </>
+            ) : authWorkflow === "forgot" ? (
+              <form onSubmit={handleForgotPasswordRequest} className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                    <Lock className="w-4 h-4 text-brand-teal" /> Forgot Password?
+                  </h3>
+                  <p className="text-xs text-slate-505 leading-relaxed">
+                    Provide your registered email. We will instantly generate a verified reset code pin on our secure system for you.
+                  </p>
+                </div>
+
+                {errorMessage && (
+                  <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200 font-medium">
+                    {errorMessage}
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Registered Email Address</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="registered@company.com"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="submit"
+                    className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    Generate Security PIN <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthWorkflow("auth");
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                    }}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 font-bold text-xs py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    Back to Login Secure Line
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                    <Shield className="w-4 h-4 text-brand-teal" /> Reset Account Password
+                  </h3>
+                  <p className="text-xs text-slate-505 leading-relaxed">
+                    Set up your workspace credentials using the simulated security pin code.
+                  </p>
+                </div>
+
+                {simulatedPin && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl space-y-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider font-mono text-blue-700">Simulated Security Pin</p>
+                    <p className="text-xs font-semibold">Your Verification reset code is: <strong className="bg-blue-100 px-2 py-0.5 rounded text-blue-900 font-mono select-all text-sm">{simulatedPin}</strong></p>
+                    <p className="text-[10px] text-blue-600 font-medium">Please enter this code below.</p>
+                  </div>
+                )}
+
+                {errorMessage && (
+                  <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200 font-medium animate-pulse">
+                    {errorMessage}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200 font-medium">
+                    {successMessage}
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Target Email Account</label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    disabled
+                    className="w-full bg-slate-100 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-500 cursor-not-allowed outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Enter Verification Pin Code</label>
+                  <input
+                    type="text"
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    placeholder="Enter 6-digit pin code"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all font-mono tracking-widest text-center"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Create New Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Establish secure new password..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-12 text-xs text-slate-800 focus:bg-white focus:border-brand-teal outline-none transition-all"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="submit"
+                    className="w-full bg-brand-teal hover:bg-brand-teal-dark text-white font-bold text-xs py-3 rounded-xl transition-all shadow-md cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    Confirm & Update Password <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthWorkflow("auth");
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                    }}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 font-bold text-xs py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    Back to Login Secure Line
                   </button>
                 </div>
               </form>
@@ -1047,12 +1412,7 @@ export default function LandingPage({
       <footer className="bg-[#001c3d] text-white py-12">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6 border-b border-white/10 pb-8 text-xs text-slate-350">
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-1 bg-brand-teal rounded text-white font-black">
-                <Zap className="w-4 h-4 text-[#001c3d]" />
-              </div>
-              <h5 className="font-extrabold text-white text-sm">Developer<span className="text-brand-teal">Connect</span></h5>
-            </div>
+            <Logo variant="light" />
             <p className="max-w-sm text-xs text-slate-300">Vetted Indian technology talent with robust legal escrow mediation standards.</p>
           </div>
 

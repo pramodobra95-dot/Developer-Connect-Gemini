@@ -24,6 +24,7 @@ import { triggerNewApplicationNotification, triggerProjectStatusChangeNotificati
 import AdminPanel from "./components/AdminPanel.tsx";
 import ChatSystem from "./components/ChatSystem.tsx";
 import LandingPage from "./components/LandingPage.tsx";
+import ProfileDrawer from "./components/ProfileDrawer.tsx";
 
 import { 
   User, 
@@ -77,6 +78,7 @@ export default function App() {
   // Navigation tab
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("dashboard");
   const [isLoading, setIsLoading] = useState(true);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // New dispute form state
   const [disputeProjId, setDisputeProjId] = useState("");
@@ -472,6 +474,34 @@ export default function App() {
     fetchData();
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    const res = await fetch("/api/admin/users/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId })
+    });
+    if (res.ok) {
+      fetchData();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Failed to delete user account.");
+    }
+  };
+
+  const handleEditUserProfile = async (userId: string, role: string, profileData: any) => {
+    const res = await fetch("/api/admin/users/edit-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, role, profileData })
+    });
+    if (res.ok) {
+      fetchData();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Failed to edit user profile.");
+    }
+  };
+
   const handleResolveDispute = async (disputeId: string, rationaleText: string, ratio?: { recruiter: number; developer: number }, status?: DisputeStatus) => {
     await fetch("/api/disputes/verdict", {
       method: "POST",
@@ -553,6 +583,7 @@ export default function App() {
         notifications={notifications}
         onMarkNotificationsRead={handleMarkNotificationsRead}
         onLogout={handleLogout}
+        onEditProfile={() => setIsProfileOpen(true)}
       />
 
       <div className="max-w-7xl mx-auto px-4 w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 pt-8 items-start">
@@ -712,6 +743,8 @@ export default function App() {
                   projects={projects}
                   applications={applications}
                   onUpdateUser={handleUpdateUserStatus}
+                  onDeleteUser={handleDeleteUser}
+                  onEditUserProfile={handleEditUserProfile}
                   onResolveDispute={handleResolveDispute}
                   onUpdatePreferences={handleUpdatePreferences}
                 />
@@ -1238,6 +1271,15 @@ export default function App() {
 
         </section>
       </div>
+
+      <ProfileDrawer 
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        currentUser={currentUser}
+        devProfile={devProfile}
+        recProfile={recProfile}
+        onUpdateProfile={handleUpdateProfile}
+      />
     </div>
   );
 }

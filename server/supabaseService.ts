@@ -135,7 +135,8 @@ CREATE TABLE IF NOT EXISTS users (
   is_verified BOOLEAN DEFAULT FALSE,
   is_suspended BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  notification_preferences JSONB
+  notification_preferences JSONB,
+  password TEXT
 );
 
 CREATE TABLE IF NOT EXISTS developer_profiles (
@@ -505,7 +506,8 @@ export async function dbGetUsers(fallback: any[]): Promise<any[]> {
       isVerified: u.is_verified,
       isSuspended: u.is_suspended,
       createdAt: u.created_at,
-      notificationPreferences: u.notification_preferences
+      notificationPreferences: u.notification_preferences,
+      password: u.password || undefined
     }));
   } catch (err: any) {
     console.info("ℹ️ [SCHEMA NOTICE] dbGetUsers: using local fallback.", err?.message || err);
@@ -522,7 +524,8 @@ export async function dbSaveUser(user: any): Promise<boolean> {
     is_verified: user.isVerified,
     is_suspended: user.isSuspended,
     created_at: user.createdAt,
-    notification_preferences: user.notificationPreferences
+    notification_preferences: user.notificationPreferences,
+    password: user.password || null
   };
   return resilientUpsert("users", payload, "id");
 }

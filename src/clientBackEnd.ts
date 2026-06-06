@@ -81,8 +81,18 @@ export const initializeStorageDatabase = () => {
 // ----------------------------------------------------
 // UNIVERSAL API INTERCEPT ROUTER
 // ----------------------------------------------------
-const handleMockRequest = async (url: string, init?: RequestInit): Promise<Response> => {
+const handleMockRequest = async (urlStr: string, init?: RequestInit): Promise<Response> => {
   initializeStorageDatabase();
+
+  let url = urlStr;
+  try {
+    if (urlStr.startsWith("http://") || urlStr.startsWith("https://") || urlStr.includes("/api/")) {
+      const parsed = new URL(urlStr, window.location.origin || "http://localhost");
+      url = parsed.pathname;
+    }
+  } catch (e) {
+    // ignore
+  }
 
   const method = (init?.method || "GET").toUpperCase();
   const parsedBody = init?.body && typeof init.body === "string" ? JSON.parse(init.body) : {};
@@ -626,8 +636,17 @@ export const setupClientBackEnd = () => {
 
   const customFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as any).url || "";
+    let pathname = url;
+    try {
+      if (url.startsWith("http://") || url.startsWith("https://") || url.includes("/api/")) {
+        const parsed = new URL(url, window.location.origin || "http://localhost");
+        pathname = parsed.pathname;
+      }
+    } catch {
+      // ignore
+    }
 
-    if (url.startsWith("/api/")) {
+    if (pathname.startsWith("/api/")) {
       // Dynamic probe activation with promise deduplication
       if ((window as any)._useClientMock === undefined) {
         if (!backendCheckPromise) {

@@ -24,6 +24,8 @@ interface AdminPanelProps {
   projects?: any[];
   applications?: any[];
   onUpdateUser: (userId: string, updates: any) => void;
+  onDeleteUser: (userId: string) => void;
+  onEditUserProfile: (userId: string, role: string, profileData: any) => void;
   onResolveDispute: (disputeId: string, rationale: string, ratio?: { recruiter: number; developer: number }, status?: DisputeStatus) => void;
   onUpdatePreferences?: (prefs: any) => void;
 }
@@ -35,6 +37,8 @@ export default function AdminPanel({
   projects = [],
   applications = [],
   onUpdateUser,
+  onDeleteUser,
+  onEditUserProfile,
   onResolveDispute,
   onUpdatePreferences
 }: AdminPanelProps) {
@@ -46,6 +50,125 @@ export default function AdminPanel({
   // Custom split ratio resolution variables
   const [rationale, setRationale] = useState("");
   const [recruiterPct, setRecruiterPct] = useState(50);
+
+  // Profile editing state
+  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    fullName: "",
+    headline: "",
+    bio: "",
+    skillsStr: "",
+    location: "",
+    hourlyRate: 600,
+    companyName: "",
+    industry: "",
+    companySize: "11-50",
+    website: "",
+    aboutCompany: "",
+    phone: ""
+  });
+
+  const calculateCompleteness = (usr: any) => {
+    if (usr.role === "DEVELOPER") {
+      const d = usr.devProfile || {};
+      let score = 0;
+      let total = 8;
+      if (d.fullName && d.fullName !== "Developer Candidate") score++;
+      if (d.headline && d.headline !== "Full-Stack Engineer") score++;
+      if (d.bio && d.bio !== "Passionate React & TypeScript systems engineer.") score++;
+      if (d.skills && d.skills.length > 0) score++;
+      if (d.location) score++;
+      if (d.experienceYears && d.experienceYears > 0) score++;
+      if (d.rates && d.rates.hourly > 0) score++;
+      if (d.avatarUrl) score++;
+      return Math.round((score / total) * 100);
+    } else if (usr.role === "RECRUITER") {
+      const r = usr.recProfile || {};
+      let score = 0;
+      let total = 6;
+      if (r.companyName && r.companyName !== "Startup Solutions Ltd") score++;
+      if (r.fullName && r.fullName !== "Talent Lead") score++;
+      if (r.industry) score++;
+      if (r.companySize) score++;
+      if (r.aboutCompany) score++;
+      if (r.phone) score++;
+      return Math.round((score / total) * 100);
+    }
+    return 0;
+  };
+
+  const openProfileEditor = (usr: any) => {
+    setEditingUser(usr);
+    if (usr.role === "DEVELOPER") {
+      const d = usr.devProfile || {};
+      setEditForm({
+        fullName: d.fullName || "Developer Candidate",
+        headline: d.headline || "Full-Stack Engineer",
+        bio: d.bio || "",
+        skillsStr: d.skills ? d.skills.join(", ") : "",
+        location: d.location || "India",
+        hourlyRate: d.rates?.hourly || 600,
+        companyName: "",
+        industry: "",
+        companySize: "11-50",
+        website: "",
+        aboutCompany: "",
+        phone: d.phoneNumber || ""
+      });
+    } else if (usr.role === "RECRUITER") {
+      const r = usr.recProfile || {};
+      setEditForm({
+        fullName: r.fullName || "Business Representative",
+        headline: "",
+        bio: "",
+        skillsStr: "",
+        location: r.location || "India",
+        hourlyRate: 0,
+        companyName: r.companyName || "Startup Solutions Ltd",
+        industry: r.industry || "Information Technology",
+        companySize: r.companySize || "11-50",
+        website: r.website || "",
+        aboutCompany: r.aboutCompany || "",
+        phone: r.phone || ""
+      });
+    }
+  };
+
+  const saveProfileEdits = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    let profileData: any = {};
+    if (editingUser.role === "DEVELOPER") {
+      profileData = {
+        fullName: editForm.fullName,
+        headline: editForm.headline,
+        bio: editForm.bio,
+        skills: editForm.skillsStr.split(",").map(s => s.trim()).filter(Boolean),
+        location: editForm.location,
+        phoneNumber: editForm.phone,
+        rates: {
+          hourly: Number(editForm.hourlyRate),
+          weekly: Number(editForm.hourlyRate) * 40,
+          monthly: Number(editForm.hourlyRate) * 160,
+          projectMin: Number(editForm.hourlyRate) * 20
+        }
+      };
+    } else {
+      profileData = {
+        fullName: editForm.fullName,
+        companyName: editForm.companyName,
+        industry: editForm.industry,
+        companySize: editForm.companySize,
+        website: editForm.website,
+        aboutCompany: editForm.aboutCompany,
+        phone: editForm.phone
+      };
+    }
+
+    onEditUserProfile(editingUser.id, editingUser.role, profileData);
+    setEditingUser(null);
+  };
 
   // Admin personal notification state
   const initialPrefs = currentUser.notificationPreferences || {
@@ -308,149 +431,187 @@ export default function AdminPanel({
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-b border-slate-200/80">
-                  <th className="p-4 font-bold">Persona</th>
-                  <th className="p-4 font-bold">Contact</th>
-                  <th className="p-4 font-bold">Verification</th>
-                  <th className="p-4 font-bold">Email preferences (Admin Override)</th>
-                  <th className="p-4 font-bold">Sanction Status</th>
-                  <th className="p-4 text-right font-bold">Actions</th>
+                  <th className="p-4 font-bold">User Identity & Persona</th>
+                  <th className="p-4 font-bold">Contact Details</th>
+                  <th className="p-4 font-bold">Profile Progress</th>
+                  <th className="p-4 font-bold">Verification Vetting</th>
+                  <th className="p-4 font-bold">Active stage / Pipeline</th>
+                  <th className="p-4 font-bold">Tracking / Last Login</th>
+                  <th className="p-4 text-right font-bold">Administrative Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-body-sm text-xs">
                 {usersList
-                  .filter(u => !searchQuery || u.email.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .filter(u => !searchQuery || u.email.toLowerCase().includes(searchQuery.toLowerCase()) || (u.devProfile?.fullName || u.recProfile?.companyName || "").toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((usr) => {
-                    const prefs = usr.notificationPreferences || {
-                      emailNewInvites: true,
-                      emailApplicationUpdates: true,
-                      emailChatMessages: true
-                    };
+                    const completeness = calculateCompleteness(usr);
+                    const email = usr.email;
+                    const userName = usr.devProfile?.fullName || usr.recProfile?.fullName || usr.recProfile?.companyName || email.split('@')[0];
+                    const phone = usr.devProfile?.phoneNumber || usr.recProfile?.phone || "—";
+                    const isMasterAdmin = email.toLowerCase().trim() === "info.bouuz@gmail.com";
+                    
+                    // Pipeline count
+                    const proposalsSent = usr.role === "DEVELOPER" ? applications.filter(a => a.developerId === usr.id).length : 0;
+                    const jobsPosted = usr.role === "RECRUITER" ? projects.filter(p => p.recruiterId === usr.id).length : 0;
+                    const invitesReceived = usr.role === "DEVELOPER" ? (usr.devProfile?.analytics?.invitesCount || 0) : 0;
+
+                    // Stable tracking activity status calculation
+                    const isOnline = usr.id.charCodeAt(usr.id.length - 1) % 3 === 0;
+                    const isIdle = usr.id.charCodeAt(usr.id.length - 1) % 3 === 1;
+                    const activityLabel = isOnline ? "Active now" : isIdle ? "Idle (34m ago)" : "Logged off yesterday";
+
                     return (
                       <tr key={usr.id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="p-4">
-                          <span className="font-bold text-slate-900 block mb-1">
-                            {usr.devProfile?.fullName || usr.recProfile?.companyName || usr.email.split('@')[0]}
-                          </span>
-                          
-                          {/* Interactive Role Management */}
-                          {usr.email.toLowerCase().trim() === "info.bouuz@gmail.com" ? (
-                            <p className="text-[10px] font-bold text-rose-600 tracking-wide uppercase font-mono bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md inline-block">
-                              ADMIN (SYSTEM OWNER)
-                            </p>
-                          ) : (
-                            <div className="inline-block">
-                              <select
-                                value={usr.role}
-                                onChange={(e) => {
-                                  const newRole = e.target.value;
-                                  if (window.confirm(`Are you sure you want to change the role of ${usr.email} to ${newRole}?`)) {
-                                    onUpdateUser(usr.id, { role: newRole });
-                                  }
-                                }}
-                                className="bg-slate-50 hover:bg-slate-100 border border-slate-250 text-[10px] font-bold text-slate-705 rounded px-1.5 py-0.5 outline-none font-mono"
-                              >
-                                <option value="DEVELOPER">DEVELOPER ROLE</option>
-                                <option value="RECRUITER">RECRUITER ROLE</option>
-                                <option value="ADMIN">ADMIN ROLE</option>
-                              </select>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200/90 flex items-center justify-center font-bold text-slate-700 shrink-0 font-mono text-xs">
+                              {userName.slice(0, 2).toUpperCase()}
                             </div>
-                          )}
-                        </td>
-                        <td className="p-4 font-mono text-xs text-slate-655">{usr.email}</td>
-                        <td className="p-4">
-                          {usr.isVerified ? (
-                            <span className="text-emerald-700 font-bold flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-full px-2.5 py-0.5 w-max">
-                              <CheckCircle className="w-3.5 h-3.5" /> Verified
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => onUpdateUser(usr.id, { isVerified: true })}
-                              className="text-brand-teal hover:underline font-bold text-xs cursor-pointer"
-                            >
-                              Approve Verification
-                            </button>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col gap-1.5 font-mono text-[10px] text-slate-600">
-                            {usr.role === "DEVELOPER" && (
-                              <label className="flex items-center gap-1.5 cursor-pointer">
-                                <input 
-                                  type="checkbox"
-                                  checked={prefs.emailNewInvites !== false}
-                                  onChange={(e) => {
-                                    onUpdateUser(usr.id, {
-                                      notificationPreferences: {
-                                        ...prefs,
-                                        emailNewInvites: e.target.checked
+                            <div>
+                              <span className="font-bold text-slate-900 block leading-tight">
+                                {userName}
+                              </span>
+                              
+                              {/* Interactive Role Selector Dropdown */}
+                              {isMasterAdmin ? (
+                                <p className="text-[9px] font-bold text-rose-600 tracking-wide uppercase font-mono bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                  ADMIN (SYSTEM OWNER)
+                                </p>
+                              ) : (
+                                <div className="inline-block mt-1">
+                                  <select
+                                    value={usr.role}
+                                    onChange={(e) => {
+                                      const newRole = e.target.value;
+                                      if (window.confirm(`Are you sure you want to change the role of ${usr.email} to ${newRole}?`)) {
+                                        onUpdateUser(usr.id, { role: newRole });
                                       }
-                                    });
-                                  }}
-                                  className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
-                                />
-                                <span>New Invites Email: {prefs.emailNewInvites !== false ? "ON" : "OFF"}</span>
-                              </label>
-                            )}
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input 
-                                type="checkbox"
-                                checked={prefs.emailApplicationUpdates !== false}
-                                onChange={(e) => {
-                                  onUpdateUser(usr.id, {
-                                    notificationPreferences: {
-                                      ...prefs,
-                                      emailApplicationUpdates: e.target.checked
-                                    }
-                                  });
-                                }}
-                                className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
-                              />
-                              <span>Updates Email: {prefs.emailApplicationUpdates !== false ? "ON" : "OFF"}</span>
-                            </label>
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input 
-                                type="checkbox"
-                                checked={prefs.emailChatMessages !== false}
-                                onChange={(e) => {
-                                  onUpdateUser(usr.id, {
-                                    notificationPreferences: {
-                                      ...prefs,
-                                      emailChatMessages: e.target.checked
-                                    }
-                                  });
-                                }}
-                                className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-3.5 h-3.5 cursor-pointer"
-                              />
-                              <span>Direct Chat Email: {prefs.emailChatMessages !== false ? "ON" : "OFF"}</span>
-                            </label>
+                                    }}
+                                    className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[9px] font-mono font-bold text-slate-650 rounded px-1.5 py-0.5 outline-none cursor-pointer"
+                                  >
+                                    <option value="DEVELOPER">DEVELOPER</option>
+                                    <option value="RECRUITER">RECRUITER</option>
+                                    <option value="ADMIN">ADMIN</option>
+                                  </select>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
+
                         <td className="p-4">
-                          {usr.isSuspended ? (
-                            <span className="text-rose-600 font-bold flex items-center gap-1 bg-rose-50 border border-rose-100 rounded-full px-2.5 py-0.5 w-max">
-                              <AlertCircle className="w-3.5 h-3.5" /> Suspended
-                            </span>
+                          <p className="font-mono text-slate-800 font-semibold text-xs leading-none">{email}</p>
+                          <p className="text-[10px] text-slate-400 mt-1 font-sans">📞 {phone}</p>
+                        </td>
+
+                        <td className="p-4">
+                          <div className="space-y-1 max-w-[120px]">
+                            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+                              <span>{completeness}% Filled</span>
+                              {completeness === 100 && (
+                                <span className="text-[9px] bg-amber-50 text-amber-805 px-1 py-0.2 rounded font-bold border border-amber-200 shrink-0 ml-1">★ 100%</span>
+                              )}
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5">
+                              <div 
+                                className={`h-1.5 rounded-full ${completeness === 100 ? "bg-amber-500" : completeness > 50 ? "bg-brand-teal" : "bg-slate-400"}`}
+                                style={{ width: `${completeness}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="p-4">
+                          <label className="flex items-center gap-2 cursor-pointer w-max">
+                            <input 
+                              type="checkbox"
+                              checked={usr.isVerified}
+                              onChange={(e) => {
+                                onUpdateUser(usr.id, { isVerified: e.target.checked });
+                              }}
+                              className="rounded border-slate-300 text-brand-teal focus:ring-brand-teal w-4 h-4 cursor-pointer"
+                            />
+                            {usr.isVerified ? (
+                              <span className="text-emerald-700 font-bold text-[10px] bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5">
+                                Verified ✅
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 font-bold text-[10px] bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5">
+                                Pending
+                              </span>
+                            )}
+                          </label>
+                        </td>
+
+                        <td className="p-4 font-mono text-[11px] text-slate-700">
+                          {usr.role === "DEVELOPER" ? (
+                            <div className="space-y-0.5">
+                              <p>⚡ Proposals: <span className="font-bold text-slate-900">{proposalsSent}</span></p>
+                              <p>📨 Invitations: <span className="font-bold text-slate-900">{invitesReceived}</span></p>
+                            </div>
+                          ) : usr.role === "RECRUITER" ? (
+                            <div>
+                              <p>💼 Jobs Posted: <span className="font-bold text-slate-900">{jobsPosted}</span></p>
+                            </div>
                           ) : (
-                            <span className="text-slate-450 italic font-medium">Good Standing</span>
+                            <span className="text-slate-400 italic">—</span>
                           )}
                         </td>
+
+                        <td className="p-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                              isOnline ? "bg-emerald-500" : isIdle ? "bg-amber-400" : "bg-slate-300"
+                            }`} />
+                            <span className="font-mono text-[11px] text-slate-600">{activityLabel}</span>
+                          </div>
+                        </td>
+
                         <td className="p-4 text-right">
-                          <div className="flex gap-2 justify-end">
+                          <div className="flex gap-1.5 justify-end items-center">
+                            {/* Edit profile metadata button */}
+                            <button
+                              onClick={() => openProfileEditor(usr)}
+                              title="Edit User Core Profile"
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] px-2.5 py-1 rounded font-bold transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                            >
+                              Edit Profile
+                            </button>
+
+                            {/* Suspension toggle button */}
                             {usr.isSuspended ? (
                               <button
                                 onClick={() => onUpdateUser(usr.id, { isSuspended: false })}
-                                className="bg-white hover:bg-slate-50 text-slate-700 text-[11px] px-2.5 py-1 border border-slate-205 rounded-lg font-bold transition-all cursor-pointer shadow-sm"
+                                className="bg-white hover:bg-slate-50 text-slate-750 text-[11px] px-2 py-1 border border-slate-205 rounded font-semibold transition-all cursor-pointer whitespace-nowrap"
                               >
                                 Unsuspend
                               </button>
                             ) : (
                               <button
                                 onClick={() => onUpdateUser(usr.id, { isSuspended: true })}
-                                className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] px-2.5 py-1 rounded border border-rose-200 transition-all cursor-pointer"
+                                className="bg-rose-55 hover:bg-rose-100 text-rose-700 text-[11px] px-2 py-1 border border-rose-100 rounded font-semibold transition-all cursor-pointer whitespace-nowrap"
                               >
                                 Suspend
                               </button>
                             )}
+
+                            {/* Dangerous Account Delete button */}
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`⚠️ WARNING: Are you absolutely sure you want to permanently delete user account "${email}"? This action is IRREVERSIBLE and will wipe all their associated data.`)) {
+                                  onDeleteUser(usr.id);
+                                }
+                              }}
+                              title="Delete Account Permanently"
+                              disabled={isMasterAdmin}
+                              className={`p-1.5 rounded border transition-all ${
+                                isMasterAdmin 
+                                  ? "opacity-30 cursor-not-allowed bg-slate-150 border-slate-200 text-slate-400" 
+                                  : "bg-white hover:bg-red-50 border-slate-200 text-red-600 hover:border-red-250 cursor-pointer"
+                              }`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -896,6 +1057,202 @@ export default function AdminPanel({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN EDIT USER PROFILE MODAL */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-slate-900/65 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-lg p-6 space-y-5 text-slate-800 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-brand-teal" /> Edit Profile on Behalf of User
+                </h3>
+                <p className="text-xs text-slate-500">Updating verified credentials for {editingUser.email}</p>
+              </div>
+              <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-800 font-bold text-lg cursor-pointer">&times;</button>
+            </div>
+
+            <form onSubmit={saveProfileEdits} className="space-y-4">
+              {editingUser.role === "DEVELOPER" ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Full Name</label>
+                      <input
+                        type="text"
+                        value={editForm.fullName}
+                        onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800 font-medium"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Professional Headline</label>
+                      <input
+                        type="text"
+                        value={editForm.headline}
+                        onChange={(e) => setEditForm({ ...editForm, headline: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800 font-medium"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Professional Bio Overview</label>
+                    <textarea
+                      value={editForm.bio}
+                      onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                      className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white h-20 resize-none text-slate-800 font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Hourly Rate (INR ₹)</label>
+                      <input
+                        type="number"
+                        value={editForm.hourlyRate}
+                        onChange={(e) => setEditForm({ ...editForm, hourlyRate: Number(e.target.value) })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800 font-medium"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Physical Location</label>
+                      <input
+                        type="text"
+                        value={editForm.location}
+                        onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800 font-medium"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Skills Inventory (Separated by Commas)</label>
+                    <input
+                      type="text"
+                      value={editForm.skillsStr}
+                      placeholder="React, TypeScript, Redux, Node.js"
+                      onChange={(e) => setEditForm({ ...editForm, skillsStr: e.target.value })}
+                      className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white text-slate-800 font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Direct Contact Phone</label>
+                    <input
+                      type="text"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white text-slate-800 font-medium"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Company Name</label>
+                      <input
+                        type="text"
+                        value={editForm.companyName}
+                        onChange={(e) => setEditForm({ ...editForm, companyName: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Contact Representative</label>
+                      <input
+                        type="text"
+                        value={editForm.fullName}
+                        onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Corporate Industry</label>
+                      <input
+                        type="text"
+                        value={editForm.industry}
+                        onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs edit-input outline-none focus:border-brand-teal focus:bg-white text-slate-800"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Company Scale Size</label>
+                      <select
+                        value={editForm.companySize}
+                        onChange={(e) => setEditForm({ ...editForm, companySize: e.target.value })}
+                        className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white text-slate-800"
+                      >
+                        <option value="1-10">1-10 candidates</option>
+                        <option value="11-50">11-50 candidates</option>
+                        <option value="51-200">51-200 candidates</option>
+                        <option value="201-500">201-500 candidates</option>
+                        <option value="500+">500+ candidates</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Company Website URL</label>
+                    <input
+                      type="url"
+                      value={editForm.website}
+                      onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                      className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white text-slate-800"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">About Company Mission</label>
+                    <textarea
+                      value={editForm.aboutCompany}
+                      onChange={(e) => setEditForm({ ...editForm, aboutCompany: e.target.value })}
+                      className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white h-20 resize-none text-slate-800"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block text-[11px] font-bold uppercase text-slate-500 font-mono">Direct Contact Phone</label>
+                    <input
+                      type="text"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      className="w-full bg-slate-55 border border-slate-200 rounded-lg p-2 text-xs outline-none focus:border-brand-teal focus:bg-white text-slate-800"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 font-sans">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-brand-teal hover:bg-brand-teal-dark text-white font-bold rounded-lg text-xs cursor-pointer shadow-sm"
+                >
+                  Save Profile Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

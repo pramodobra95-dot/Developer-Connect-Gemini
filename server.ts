@@ -83,7 +83,7 @@ if (geminiApiKey) {
 // ----------------------------------------------------
 let currentUserId = ""; // Default session user empty (no active logged in session)
 
-let users = [
+let users: any[] = [
   { id: "admin", email: "info.bouuz@gmail.com", role: UserRole.ADMIN, isVerified: true, isSuspended: false, createdAt: "2025-01-01T00:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: true } },
   { id: "user-dev1", email: "priya.sharma@outstaff.io", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2025-01-10T08:00:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
   { id: "user-dev2", email: "amit.patel@outstaff.io", role: UserRole.DEVELOPER, isVerified: true, isSuspended: false, createdAt: "2025-01-12T09:30:00Z", notificationPreferences: { emailNewInvites: true, emailApplicationUpdates: true, emailChatMessages: true, emailGlobalAlerts: false } },
@@ -598,8 +598,66 @@ async function startServer() {
     res.json({ user, devProfile, recProfile });
   });
 
-  app.post("/api/session/login", (req, res) => {
+  // In-memory verification codes for password resets
+  const passwordResetCodes = new Map<string, string>();
+
+  app.post("/api/session/forgot-password", (req, res) => {
     const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email address is required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
+    const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+    if (!user) {
+      return res.status(404).json({ error: "No registered profile found matching this email address." });
+    }
+
+    // Generate a 6-digit pin
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    passwordResetCodes.set(targetEmail, code);
+
+    console.log(`🔑 [PASSWORD RESET] Simulated security code for ${targetEmail}: ${code}`);
+    
+    // Create an admin notification
+    addAdminNotification("Security Alert", `Password reset requested for ${targetEmail}. Simulated verification code: ${code}`);
+
+    res.json({ 
+      success: true, 
+      message: "Validation security pin generated.",
+      code 
+    });
+  });
+
+  app.post("/api/session/reset-password", (req, res) => {
+    const { email, code, newPassword } = req.body;
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ error: "Email, security code, and new password are required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
+    const activeCode = passwordResetCodes.get(targetEmail);
+
+    if (!activeCode || activeCode !== code.trim()) {
+      return res.status(400).json({ error: "Invalid security verification code. Please check and try again." });
+    }
+
+    const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+    if (!user) {
+      return res.status(404).json({ error: "Unable to locate user account matching this request." });
+    }
+
+    user.password = newPassword;
+    passwordResetCodes.delete(targetEmail);
+    
+    // Sync to file system
+    syncUser(user);
+
+    addAdminNotification("Security Update", `Password changed successfully for account ${targetEmail}.`);
+
+    res.json({ success: true, message: "Your password has been changed successfully. You can now log in!" });
+  });
+
+  app.post("/api/session/login", (req, res) => {
+    const { email, password } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required." });
     }
@@ -614,6 +672,12 @@ async function startServer() {
       if (user.isSuspended) {
         return res.status(403).json({ error: "This account has been suspended by administration." });
       }
+      
+      // If user has a password, we MUST require it. Backward compatible if no password set.
+      if (user.password && user.password !== password) {
+        return res.status(401).json({ error: "Incorrect authentication password. Please check credentials or use 'Forgot Password'." });
+      }
+
       currentUserId = user.id;
       const devProfile = developerProfiles[user.id] || null;
       const recProfile = recruiterProfiles[user.id] || null;
@@ -629,7 +693,7 @@ async function startServer() {
   });
 
   app.post("/api/session/signup", async (req, res) => {
-    const { email, role, fullName, headline, companyName, industry, bio, aboutCompany } = req.body;
+    const { email, role, fullName, headline, companyName, industry, bio, aboutCompany, password } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required." });
     }
@@ -674,6 +738,7 @@ async function startServer() {
       isVerified: role === UserRole.ADMIN ? true : false, 
       isSuspended: false, 
       createdAt: new Date().toISOString(),
+      password: password || undefined,
       notificationPreferences: {
         emailNewInvites: true,
         emailApplicationUpdates: true,
@@ -812,6 +877,46 @@ async function startServer() {
       res.json({ success: true, user: users[userIndex] });
     } else {
       res.status(404).json({ error: "User not found" });
+    }
+  });
+
+  app.post("/api/admin/users/delete", async (req, res) => {
+    const { userId } = req.body;
+    const userIndex = users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      const email = users[userIndex].email;
+      if (email.toLowerCase().trim() === "info.bouuz@gmail.com") {
+        return res.status(403).json({ error: "Cannot delete the master admin account." });
+      }
+      users.splice(userIndex, 1);
+      delete developerProfiles[userId];
+      delete recruiterProfiles[userId];
+      res.json({ success: true, message: `Account ${email} has been permanently deleted.` });
+    } else {
+      res.status(404).json({ error: "User not found." });
+    }
+  });
+
+  app.post("/api/admin/users/edit-profile", async (req, res) => {
+    const { userId, role, profileData } = req.body;
+    if (role === "DEVELOPER") {
+      developerProfiles[userId] = {
+        ...developerProfiles[userId],
+        ...profileData,
+        userId
+      };
+      await syncDevProfile(userId, developerProfiles[userId]);
+      res.json({ success: true, profile: developerProfiles[userId] });
+    } else if (role === "RECRUITER") {
+      recruiterProfiles[userId] = {
+        ...recruiterProfiles[userId],
+        ...profileData,
+        userId
+      };
+      await syncRecProfile(userId, recruiterProfiles[userId]);
+      res.json({ success: true, profile: recruiterProfiles[userId] });
+    } else {
+      res.status(400).json({ error: "Unsupported user role configuration." });
     }
   });
 

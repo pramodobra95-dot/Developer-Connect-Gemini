@@ -82,8 +82,8 @@ export default function DeveloperDashboard({
   onCompleteStage,
   onSignNDA
 }: DeveloperDashboardProps) {
-  // Tabs: "dashboard", "projects", "profile", "invites"
-  const [activeTab, setActiveTab] = useState<"dashboard" | "projects" | "profile" | "invites">("dashboard");
+  // Tabs: "dashboard", "projects", "invites"
+  const [activeTab, setActiveTab ] = useState<"dashboard" | "projects" | "invites">("dashboard");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
   // NDA signature typing map
@@ -401,7 +401,7 @@ export default function DeveloperDashboard({
         
         {/* Navigation Tabs */}
         <div className="flex bg-slate-105 p-1 rounded-xl border border-slate-200/60 self-stretch md:self-auto justify-around">
-          {(["dashboard", "projects", "profile"] as const).map((tab) => (
+          {(["dashboard", "projects"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -439,7 +439,7 @@ export default function DeveloperDashboard({
             <div className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-300 transition-all shadow-sm">
               <div>
                 <p className="text-[10px] font-mono tracking-widest text-slate-500 uppercase font-semibold">Profile Views</p>
-                <h3 className="text-3xl font-black text-slate-900 mt-1">{devProfile.analytics.profileViews}</h3>
+                <h3 className="text-3xl font-black text-slate-900 mt-1">{devProfile?.analytics?.profileViews ?? 0}</h3>
               </div>
               <p className="text-[11px] text-brand-teal font-bold flex items-center gap-1 mt-4">
                 <TrendingUp className="w-3.5 h-3.5" /> +14.2% from search indices
@@ -449,7 +449,7 @@ export default function DeveloperDashboard({
             <div className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-300 transition-all shadow-sm">
               <div>
                 <p className="text-[10px] font-mono tracking-widest text-slate-500 uppercase font-semibold">Recruiter Invites</p>
-                <h3 className="text-3xl font-black text-slate-900 mt-1">{devProfile.analytics.invitesCount}</h3>
+                <h3 className="text-3xl font-black text-slate-900 mt-1">{devProfile?.analytics?.invitesCount ?? 0}</h3>
               </div>
               <p className="text-[11px] text-slate-500 font-semibold flex items-center gap-1 mt-4">
                 {invites.filter(i => i.status === InviteStatus.PENDING).length} pending response
@@ -1435,8 +1435,8 @@ export default function DeveloperDashboard({
         </div>
       )}
 
-      {/* PROFILE CONFIG TAB */}
-      {activeTab === "profile" && (
+      {/* PROFILE CONFIG TAB (REMOVED: Now handled by the global Profile Settings dynamic drawer) */}
+      {false && (
         <div className="space-y-6 animate-fade-in">
           {/* Profile Completeness Dashboard */}
           <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-[#0c1c2b] rounded-2xl p-6 text-white shadow-lg space-y-6">

@@ -99,8 +99,8 @@ export default function RecruiterDashboard({
   onSignNDA,
   onQuickHire
 }: RecruiterDashboardProps) {
-  // Tabs: "dashboard", "post", "candidates", "applications", "profile"
-  const [activeTab, setActiveTab] = useState<"dashboard" | "post" | "candidates" | "applications" | "profile">("dashboard");
+  // Tabs: "dashboard", "post", "candidates", "applications"
+  const [activeTab, setActiveTab ] = useState<"dashboard" | "post" | "candidates" | "applications">("dashboard");
   
   // Quick Hire mode toggle states for recruiters
   const [isQuickHireMode, setIsQuickHireMode] = useState(false);
@@ -370,7 +370,7 @@ export default function RecruiterDashboard({
         </div>
 
         <div className="flex bg-slate-105 p-1 rounded-xl border border-slate-205 self-stretch md:self-auto justify-around flex-wrap gap-1">
-          {(["dashboard", "post", "candidates", "applications", "profile"] as const).map((tab) => (
+          {(["dashboard", "post", "candidates", "applications"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -384,7 +384,7 @@ export default function RecruiterDashboard({
                   : "text-slate-500 hover:text-slate-800 hover:bg-white"
               }`}
             >
-              {tab === "post" ? "Post Job" : tab === "profile" ? "Profile & Company" : tab}
+              {tab === "post" ? "Post Job" : tab}
             </button>
           ))}
         </div>
@@ -1816,8 +1816,8 @@ export default function RecruiterDashboard({
         </div>
       )}
 
-      {/* RECRUITER PROFILE SETTINGS TAB */}
-      {activeTab === "profile" && (
+      {/* RECRUITER PROFILE SETTINGS TAB (REMOVED: Now handled by the global Profile Settings dynamic drawer) */}
+      {false && (
         <form onSubmit={handleRecProfileSave} className="bg-white border border-slate-205 rounded-2xl p-6 space-y-6 shadow-sm">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-100">
             <div>

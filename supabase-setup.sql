@@ -69,7 +69,8 @@ create table public.users (
   email_new_invites boolean not null default true,
   email_application_updates boolean not null default true,
   email_chat_messages boolean not null default true,
-  email_global_alerts boolean not null default true
+  email_global_alerts boolean not null default true,
+  password text
 );
 
 -- Developer Profiles Table
