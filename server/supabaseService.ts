@@ -3,8 +3,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || "";
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 
 let supabase: SupabaseClient | null = null;
 
@@ -567,6 +567,16 @@ export async function dbGetDeveloperProfiles(fallback: Record<string, any>): Pro
 
 export async function dbSaveDeveloperProfile(userId: string, profile: any): Promise<boolean> {
   if (!supabase) return false;
+
+  // Optimize base64 images by uploading them to public storage buckets
+  if (profile.avatarUrl && profile.avatarUrl.startsWith("data:")) {
+    try {
+      profile.avatarUrl = await dbUploadFile(profile.avatarUrl, `dev_${userId}.jpeg`);
+    } catch (e) {
+      console.error("Failed to upload base64 candidate photo:", e);
+    }
+  }
+
   const payload = {
     user_id: userId,
     full_name: profile.fullName || "Unspecified",
@@ -619,6 +629,23 @@ export async function dbGetRecruiterProfiles(fallback: Record<string, any>): Pro
 
 export async function dbSaveRecruiterProfile(userId: string, profile: any): Promise<boolean> {
   if (!supabase) return false;
+
+  // Optimize base64 images by uploading them to public storage buckets
+  if (profile.avatarUrl && profile.avatarUrl.startsWith("data:")) {
+    try {
+      profile.avatarUrl = await dbUploadFile(profile.avatarUrl, `rec_${userId}.jpeg`);
+    } catch (e) {
+      console.error("Failed to upload base64 recruiter photo:", e);
+    }
+  }
+  if (profile.companyLogoUrl && profile.companyLogoUrl.startsWith("data:")) {
+    try {
+      profile.companyLogoUrl = await dbUploadFile(profile.companyLogoUrl, `logo_${userId}.jpeg`);
+    } catch (e) {
+      console.error("Failed to upload base64 company logo:", e);
+    }
+  }
+
   const payload = {
     user_id: userId,
     company_name: profile.companyName || "Unspecified",

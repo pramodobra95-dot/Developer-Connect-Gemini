@@ -119,13 +119,14 @@ export default function ProfileDrawer({
     }
   }, [devProfile, recProfile, currentUser, isOpen]);
 
-  // Image Upload handler for JPEG
+  // Image Upload handler for JPEG/PNG/WEBP
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: "avatar" | "recAvatar" | "companyLogo") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "image/jpeg" && file.type !== "image/jpg") {
-      alert("Format error: Only JPEG/JPG images are permitted for profile credentials.");
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Format error: Only JPEG, PNG or WEBP images are permitted.");
       return;
     }
 
@@ -386,13 +387,13 @@ export default function ProfileDrawer({
                           )}
                           <label htmlFor="drawer-avatar-upload-file" className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center cursor-pointer text-white text-[9px] font-bold gap-1">
                             <Camera className="w-4 h-4" />
-                            <span>JPEG Only</span>
+                            <span>Edit Image</span>
                           </label>
                         </div>
                         <input
                           id="drawer-avatar-upload-file"
                           type="file"
-                          accept=".jpg,.jpeg"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
                           onChange={(e) => handleImageUpload(e, "avatar")}
                           className="hidden"
                         />
@@ -400,7 +401,7 @@ export default function ProfileDrawer({
 
                       <div className="col-span-2 space-y-1">
                         <p className="font-bold text-slate-700">Display Profile Photo</p>
-                        <p className="text-[10px] text-slate-500 leading-relaxed">Required standard: JPEG/JPG graphic format. Uploading custom logo assets establishes trustworthy workspace matching.</p>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">Required standard: JPEG, PNG or WebP format. Uploading custom logo assets establishes trustworthy workspace matching.</p>
                       </div>
                     </div>
 
@@ -674,7 +675,7 @@ export default function ProfileDrawer({
                             className="w-16 h-16 rounded-full border border-slate-300 object-cover shadow-sm bg-white"
                           />
                           <span className="absolute bottom-0 right-0 bg-brand-teal text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-white leading-none">
-                            JPEG
+                            Image
                           </span>
                         </div>
                         <div className="space-y-1">
@@ -685,7 +686,7 @@ export default function ProfileDrawer({
                           <input
                             id="drawer-rec-avatar-upload"
                             type="file"
-                            accept=".jpg,.jpeg"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
                             onChange={(e) => handleImageUpload(e, "recAvatar")}
                             className="hidden"
                           />
@@ -701,7 +702,7 @@ export default function ProfileDrawer({
                             className="w-16 h-16 rounded-xl border border-slate-300 object-cover shadow-sm bg-white"
                           />
                           <span className="absolute bottom-0 right-0 bg-brand-teal text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-white leading-none">
-                            JPEG
+                            Image
                           </span>
                         </div>
                         <div className="space-y-1">
@@ -712,7 +713,7 @@ export default function ProfileDrawer({
                           <input
                             id="drawer-rec-logo-upload"
                             type="file"
-                            accept=".jpg,.jpeg"
+                            accept="image/jpeg,image/jpg,image/png,image/webp"
                             onChange={(e) => handleImageUpload(e, "companyLogo")}
                             className="hidden"
                           />

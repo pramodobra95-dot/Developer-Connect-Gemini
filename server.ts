@@ -301,22 +301,25 @@ async function seedPremiumData() {
   }
 }
 
-async function initializeSupabaseSync(): Promise<void> {
+async function initializeSupabaseSync(forceAwait = false): Promise<void> {
   if (!isSupabaseConfigured()) return;
 
   // Promise deduplication: reuse ongoing hydration promise if active
   if (ongoingHydrationPromise) {
-    return ongoingHydrationPromise;
+    if (forceAwait) {
+      await ongoingHydrationPromise;
+    }
+    return;
   }
 
-  // Cooldown rate-limit: avoid querying Supabase more than once every 15 seconds
+  // Cooldown rate-limit: avoid querying Supabase more than once every 15 seconds unless forced
   const COOLDOWN_MS = 15000;
-  if (Date.now() - lastHydrationTime < COOLDOWN_MS) {
+  if (!forceAwait && (Date.now() - lastHydrationTime < COOLDOWN_MS)) {
     return;
   }
 
   ongoingHydrationPromise = (async () => {
-    console.log("🔄 Hydrating local in-memory DB tables with Supabase database content (throttled)...");
+    console.log(`🔄 Hydrating local in-memory DB tables with Supabase database content (forceAwait=${forceAwait})...`);
     try {
       // 1. Users
       const dbUsers = await dbGetUsers([]);
@@ -430,7 +433,7 @@ async function initializeSupabaseSync(): Promise<void> {
     }
   })();
 
-  return ongoingHydrationPromise;
+  await ongoingHydrationPromise;
 }
 
 // Background Replication Triggers
@@ -566,8 +569,22 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Real-time Supabase request hydration middleware
+  // Real-time Supabase request hydration middleware and session ID resolver
   app.use("/api", (req, res, next) => {
+    let parsedId = "";
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+      const parts = cookieHeader.split(';');
+      for (const part of parts) {
+        const [name, ...value] = part.trim().split('=');
+        if (name === "session_id") {
+          parsedId = value.join('=');
+          break;
+        }
+      }
+    }
+    (req as any).currentUserId = parsedId || currentUserId || "guest";
+
     if (req.path === "/supabase/status" || req.path === "/session/logout") {
       return next();
     }
@@ -585,7 +602,11 @@ async function startServer() {
   // ----------------------------------------------------
 
   // Current session routing (Simulated auth switcher)
-  app.get("/api/session", (req, res) => {
+  app.get("/api/session", async (req, res) => {
+    if (isSupabaseConfigured()) {
+      await initializeSupabaseSync(true);
+    }
+    const currentUserId = (req as any).currentUserId;
     if (currentUserId === "guest") {
       return res.json({ user: null, devProfile: null, recProfile: null });
     }
@@ -600,6 +621,7 @@ async function startServer() {
 
   // In-memory verification codes for password resets
   const passwordResetCodes = new Map<string, string>();
+  const signUpVerificationCodes = new Map<string, string>();
 
   app.post("/api/session/forgot-password", (req, res) => {
     const { email } = req.body;
@@ -656,7 +678,35 @@ async function startServer() {
     res.json({ success: true, message: "Your password has been changed successfully. You can now log in!" });
   });
 
-  app.post("/api/session/login", (req, res) => {
+  app.post("/api/session/verify-signup", async (req, res) => {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email address and verification PIN are required." });
+    }
+    const targetEmail = email.toLowerCase().trim();
+    const storedCode = signUpVerificationCodes.get(targetEmail);
+    if (!storedCode || storedCode !== code.trim()) {
+      return res.status(400).json({ error: "Incorrect verification PIN. Please check your simulated code or notification dashboard." });
+    }
+
+    const user = users.find(u => u.email.toLowerCase().trim() === targetEmail);
+    if (!user) {
+      return res.status(404).json({ error: "No registered profile found matching this email address." });
+    }
+
+    user.isVerified = true;
+    signUpVerificationCodes.delete(targetEmail);
+    await syncUser(user);
+
+    addAdminNotification("Security Activation", `Account ${targetEmail} successfully verified email.`);
+
+    res.json({ success: true, message: "Your email address has been verified successfully. You can now log in!" });
+  });
+
+  app.post("/api/session/login", async (req, res) => {
+    if (isSupabaseConfigured()) {
+      await initializeSupabaseSync(true);
+    }
     const { email, password } = req.body;
     if (!email) {
       return res.status(400).json({ error: "Email is required." });
@@ -672,6 +722,20 @@ async function startServer() {
       if (user.isSuspended) {
         return res.status(403).json({ error: "This account has been suspended by administration." });
       }
+      if (!user.isVerified) {
+        let verifyCode = signUpVerificationCodes.get(targetEmail);
+        if (!verifyCode) {
+          verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+          signUpVerificationCodes.set(targetEmail, verifyCode);
+        }
+        console.log(`✉️ [EMAIL VERIFICATION LOGIN RETRY] PIN for ${targetEmail}: ${verifyCode}`);
+        return res.status(403).json({ 
+          error: "unverified", 
+          message: "This account's email has not been verified yet. Please enter your verification code to activate your account.",
+          email: user.email,
+          verificationCode: verifyCode
+        });
+      }
       
       // If user has a password, we MUST require it. Backward compatible if no password set.
       if (user.password && user.password !== password) {
@@ -679,6 +743,7 @@ async function startServer() {
       }
 
       currentUserId = user.id;
+      res.setHeader('Set-Cookie', `session_id=${user.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
       const devProfile = developerProfiles[user.id] || null;
       const recProfile = recruiterProfiles[user.id] || null;
       res.json({ success: true, user, devProfile, recProfile });
@@ -689,6 +754,7 @@ async function startServer() {
 
   app.post("/api/session/logout", (req, res) => {
     currentUserId = "guest";
+    res.setHeader('Set-Cookie', 'session_id=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
     res.json({ success: true });
   });
 
@@ -731,11 +797,15 @@ async function startServer() {
       }
     }
 
+    const verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
+    signUpVerificationCodes.set(targetEmail, verifyCode);
+    console.log(`✉️ [EMAIL VERIFICATION SIGNUP] PIN generated for ${targetEmail}: ${verifyCode}`);
+
     const newUser = { 
       id, 
       email: email.trim(), 
       role, 
-      isVerified: role === UserRole.ADMIN ? true : false, 
+      isVerified: false, // Must verify email before logging in
       isSuspended: false, 
       createdAt: new Date().toISOString(),
       password: password || undefined,
@@ -743,7 +813,7 @@ async function startServer() {
         emailNewInvites: true,
         emailApplicationUpdates: true,
         emailChatMessages: true,
-        emailGlobalAlerts: role === UserRole.ADMIN ? true : false
+        emailGlobalAlerts: false
       }
     };
     users.push(newUser);
@@ -783,13 +853,13 @@ async function startServer() {
       await syncUser(newUser);
     }
 
-    currentUserId = id;
-    addAdminNotification("New User Registered", `${fullName || companyName || "New user"} signed up as a new ${role}.`);
+    addAdminNotification("Pending Verification", `A verification PIN ${verifyCode} has been sent to ${targetEmail} to activate their profile.`);
     res.json({ 
       success: true, 
-      user: newUser, 
-      devProfile: developerProfiles[id] || null, 
-      recProfile: recruiterProfiles[id] || null 
+      needsVerification: true,
+      email: targetEmail,
+      verificationCode: verifyCode, // Provided for sandbox ease of use
+      user: newUser
     });
   });
 
@@ -798,6 +868,7 @@ async function startServer() {
     const user = users.find(u => u.id === userId);
     if (user) {
       currentUserId = userId;
+      res.setHeader('Set-Cookie', `session_id=${userId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
       res.json({ success: true, user });
     } else {
       res.status(404).json({ error: "User not found" });
@@ -805,12 +876,13 @@ async function startServer() {
   });
 
   // Users endpoint (useful for Admin list)
-  app.get("/api/users", (req, res) => {
+  app.get("/api/users", async (req, res) => {
     if (isSupabaseConfigured()) {
-      // Trigger background dynamic rehydration sync for real-time dashboard data without awaiting
-      initializeSupabaseSync().catch(syncErr => {
+      try {
+        await initializeSupabaseSync(true);
+      } catch (syncErr: any) {
         console.error("⚠️ [DYNAMIC GET USERS] Supabase sync error:", syncErr?.message || syncErr);
-      });
+      }
     }
     const combined = users.map(user => {
       return {
@@ -921,6 +993,7 @@ async function startServer() {
   });
 
   app.post("/api/users/preferences", async (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     if (currentUserId === "guest") {
       return res.status(401).json({ error: "Unauthenticated" });
     }
@@ -1002,6 +1075,7 @@ async function startServer() {
   });
 
   app.post("/api/projects", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { title, description, techStack, budget, hiringType, workMode, duration, aiMetrics } = req.body;
     const id = "proj-" + Math.random().toString(36).substring(2, 9);
     const newProject: Project = {
@@ -1111,6 +1185,7 @@ async function startServer() {
   });
 
   app.post("/api/ndas", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { projectId, developerId, terms } = req.body;
     const id = "nda-" + Math.random().toString(36).substring(2, 9);
     
@@ -1223,6 +1298,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   // RECRUITER QUICK-HIRE DIRECT ENGAGEMENT API
   // ----------------------------------------------------
   app.post("/api/projects/quick-hire", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { projectId, developerId, proposedRate, timelineEstimate, coverLetter } = req.body;
     
     const proj = projects.find(p => p.id === projectId);
@@ -1293,6 +1369,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   app.post("/api/applications", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { projectId, coverLetter, proposedRate, availability, timelineEstimate } = req.body;
     const id = "app-" + Math.random().toString(36).substring(2, 9);
     const newApp: Application = {
@@ -1362,6 +1439,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
   // Profile management endpoint
   app.post("/api/profile/developer", async (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const profile = req.body;
     developerProfiles[currentUserId] = {
       ...developerProfiles[currentUserId],
@@ -1373,6 +1451,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   app.post("/api/profile/recruiter", async (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const profile = req.body;
     recruiterProfiles[currentUserId] = {
       ...recruiterProfiles[currentUserId],
@@ -1389,6 +1468,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   app.post("/api/invites", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { projectId, developerId, message } = req.body;
     const id = "inv-" + Math.random().toString(36).substring(2, 9);
     const newInvite: Invite = {
@@ -1435,6 +1515,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   app.post("/api/contacts/request", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { developerId } = req.body;
     const id = "con-" + Math.random().toString(36).substring(2, 9);
     const newRequest: ContactAccessRequest = {
@@ -1485,6 +1566,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
   // Chats & messaging
   app.get("/api/chats", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     // Return chats involving current user
     const userChats = chats.filter(c => c.developerId === currentUserId || c.recruiterId === currentUserId);
     res.json(userChats);
@@ -1496,6 +1578,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
   });
 
   app.post("/api/messages", async (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { chatId, receiverId, text, fileUrl, fileType } = req.body;
     
     let processedFileUrl = fileUrl;
@@ -1564,6 +1647,7 @@ The NDA must be detailed, including Clauses for Confidential Information classif
 
   // Gemini suggested actions generator
   app.get("/api/chats/:chatId/suggested-actions", async (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { chatId } = req.params;
     const chat = chats.find(c => c.id === chatId);
     if (!chat) {
@@ -1807,6 +1891,7 @@ Instructions:
   });
 
   app.post("/api/disputes", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { projectId, milestoneTitle, opponentId, reason, details, escrowAmount, proposedResolution } = req.body;
     const id = "disp-" + Math.random().toString(36).substring(2, 9);
     const newDispute: Dispute = {
@@ -1847,11 +1932,13 @@ Instructions:
 
   // Notifications
   app.get("/api/notifications", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const userNotifications = notifications.filter(n => n.userId === currentUserId || (currentUserId === "admin" && n.userId === "admin"));
     res.json(userNotifications);
   });
 
   app.post("/api/notifications/read", (req, res) => {
+    const currentUserId = (req as any).currentUserId;
     const { notificationId } = req.body;
     if (notificationId === "all") {
       notifications.forEach(n => {

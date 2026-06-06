@@ -140,7 +140,9 @@ export default function AdminPanel({
     
     let profileData: any = {};
     if (editingUser.role === "DEVELOPER") {
+      const existing = editingUser.devProfile || {};
       profileData = {
+        ...existing,
         fullName: editForm.fullName,
         headline: editForm.headline,
         bio: editForm.bio,
@@ -148,6 +150,7 @@ export default function AdminPanel({
         location: editForm.location,
         phoneNumber: editForm.phone,
         rates: {
+          ...existing.rates,
           hourly: Number(editForm.hourlyRate),
           weekly: Number(editForm.hourlyRate) * 40,
           monthly: Number(editForm.hourlyRate) * 160,
@@ -155,7 +158,9 @@ export default function AdminPanel({
         }
       };
     } else {
+      const existing = editingUser.recProfile || {};
       profileData = {
+        ...existing,
         fullName: editForm.fullName,
         companyName: editForm.companyName,
         industry: editForm.industry,

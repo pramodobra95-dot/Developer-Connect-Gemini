@@ -45,6 +45,12 @@ export default function LandingPage({
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
   const [selectedRole, setSelectedRole] = useState<"DEVELOPER" | "RECRUITER">("DEVELOPER");
   
+  // Email Verification State
+  const [isVerifyingSignUp, setIsVerifyingSignUp] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [simulatedVerifyPin, setSimulatedVerifyPin] = useState("");
+  
   // Auth Form State
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
@@ -233,6 +239,37 @@ export default function LandingPage({
     }
   };
 
+  const handleVerifySignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!verificationCode) {
+      setErrorMessage("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    try {
+      const resp = await fetch("/api/session/verify-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: verificationEmail, code: verificationCode })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setSuccessMessage("Your email has been verified successfully! You can now log into your account.");
+        setIsVerifyingSignUp(false);
+        setVerificationCode("");
+        setActiveTab("login");
+        setEmail(verificationEmail);
+      } else {
+        setErrorMessage(data.error || "Failed to verify email code.");
+      }
+    } catch {
+      setErrorMessage("Network connection timed out during verification.");
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent, guestEmail?: string) => {
     if (e) e.preventDefault();
     setErrorMessage("");
@@ -257,7 +294,12 @@ export default function LandingPage({
           onLoginSuccess();
         }, 1000);
       } else {
-        if (data.error && data.error.toLowerCase().includes("not registered")) {
+        if (data.error === "unverified") {
+          setErrorMessage(data.message || "Verification required.");
+          setVerificationEmail(data.email || targetEmail);
+          setSimulatedVerifyPin(data.verificationCode || "");
+          setIsVerifyingSignUp(true);
+        } else if (data.error && data.error.toLowerCase().includes("not registered")) {
           setErrorMessage("This email is not registered yet. We've switched you over to 'Sign Up Account' so you can set up your profile!");
           setActiveTab("signup");
           setEmail(targetEmail);
@@ -300,10 +342,17 @@ export default function LandingPage({
       });
       const data = await resp.json();
       if (resp.ok) {
-        setSuccessMessage("Account created successfully! Auto-launching secure workflow dashboard...");
-        setTimeout(() => {
-          onLoginSuccess();
-        }, 1200);
+        if (data.needsVerification) {
+          setSuccessMessage("Account created! Let's verify your email address to activate your account.");
+          setVerificationEmail(data.email);
+          setSimulatedVerifyPin(data.verificationCode || "");
+          setIsVerifyingSignUp(true);
+        } else {
+          setSuccessMessage("Account created successfully! Auto-launching secure workflow dashboard...");
+          setTimeout(() => {
+            onLoginSuccess();
+          }, 1200);
+        }
       } else {
         setErrorMessage(data.error || "Failed to create account profile.");
       }
@@ -514,7 +563,98 @@ export default function LandingPage({
           {/* DYNAMIC LANDING LOGIN/SIGNUP CARD */}
           <div id="auth-section" className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl shadow-xl p-6 lg:p-8 space-y-6 relative">
             
-            {authWorkflow === "auth" ? (
+            {isVerifyingSignUp ? (
+              <form onSubmit={handleVerifySignUp} className="space-y-4">
+                <div className="text-center space-y-2">
+                  <div className="mx-auto w-12 h-12 bg-teal-50 text-brand-teal rounded-full flex items-center justify-center border border-teal-100 shadow-sm">
+                    <ShieldCheck className="w-6 h-6 text-brand-teal animate-pulse" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Confirm Your Email Address</h3>
+                  <p className="text-xs text-slate-500">
+                    We've sent a 6-digit verification code to <span className="font-semibold text-slate-700">{verificationEmail}</span>. Please fetch the code to activate your account.
+                  </p>
+                </div>
+
+                {errorMessage && (
+                  <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-lg border border-rose-200 font-medium">
+                    {errorMessage}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="p-3 bg-emerald-50 text-emerald-800 text-xs rounded-lg border border-emerald-200 font-medium">
+                    {successMessage}
+                  </div>
+                )}
+
+                {simulatedVerifyPin && (
+                  <div className="p-3 bg-amber-50 text-amber-800 text-xs rounded-lg border border-amber-200/60 font-mono flex flex-col gap-1 items-center justify-center">
+                    <span className="font-bold font-sans text-[10px] tracking-wider uppercase text-amber-700">Simulation Inbox Delivery PIN</span>
+                    <span className="text-lg font-black tracking-widest text-[#0e7490]">{simulatedVerifyPin}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">6-Digit Verification Code</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Enter validation code"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-center text-lg font-mono tracking-widest text-[#0e7490] focus:bg-white focus:border-brand-teal outline-none transition-all"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-[#0e7490] hover:bg-[#0891b2] text-white rounded-xl py-3 text-xs font-bold transition-all shadow-md uppercase tracking-wider cursor-pointer"
+                >
+                  Verify & Activate Account
+                </button>
+
+                <div className="flex gap-2 justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsVerifyingSignUp(false);
+                      setVerificationCode("");
+                      setErrorMessage("");
+                      setSuccessMessage("");
+                    }}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    ← Back to Login
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setSuccessMessage("Re-requesting code...");
+                      try {
+                        const r = await fetch("/api/session/login", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ email: verificationEmail, password })
+                        });
+                        const d = await r.json();
+                        if (d.error === "unverified" && d.verificationCode) {
+                          setSimulatedVerifyPin(d.verificationCode);
+                          setSuccessMessage("A fresh verification PIN has been triggered!");
+                        } else {
+                          setSuccessMessage("Code resend triggered. Please check notifications.");
+                        }
+                      } catch {
+                        setErrorMessage("Failed to resend code.");
+                      }
+                    }}
+                    className="text-[10px] font-bold text-brand-teal hover:underline cursor-pointer"
+                  >
+                    Resend Verification PIN
+                  </button>
+                </div>
+              </form>
+            ) : authWorkflow === "auth" ? (
               <>
                 <div className="flex border-b border-slate-100">
                   <button

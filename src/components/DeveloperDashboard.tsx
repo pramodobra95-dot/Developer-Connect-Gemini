@@ -143,13 +143,14 @@ export default function DeveloperDashboard({
   const [isAIProposalLoading, setIsAIProposalLoading] = useState(false);
   const [aiProposalText, setAiProposalText] = useState<{ title: string; pitch: string } | null>(null);
 
-  // Image Upload handler for JPEG
+  // Image Upload handler for JPEG/PNG/WEBP
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "image/jpeg" && file.type !== "image/jpg") {
-      alert("Format error: Only JPEG/JPG images are permitted for profile photos.");
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Format error: Only JPEG, PNG or WEBP images are permitted for profile photos.");
       return;
     }
 
@@ -1553,13 +1554,13 @@ export default function DeveloperDashboard({
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <span className="block text-xs font-bold text-slate-700">Display Profile Picture (JPEG Only)</span>
-                  <p className="text-[11px] text-slate-500 leading-tight">Upload a professional face photo. File must be strictly in JPEG format.</p>
+                  <span className="block text-xs font-bold text-slate-700">Display Profile Picture</span>
+                  <p className="text-[11px] text-slate-500 leading-tight">Upload a professional face photo. File can be JPEG, PNG or WebP format.</p>
                   <div className="flex items-center gap-2 pt-1">
                     <input
                       type="file"
                       id="dev-photo-upload"
-                      accept="image/jpeg, image/jpg"
+                      accept="image/jpeg, image/jpg, image/png, image/webp"
                       onChange={handleImageUpload}
                       className="hidden"
                     />
@@ -1567,7 +1568,7 @@ export default function DeveloperDashboard({
                       htmlFor="dev-photo-upload"
                       className="bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-bold px-3 py-1.5 border border-slate-300 rounded cursor-pointer transition-colors shadow-sm inline-block"
                     >
-                      Choose JPEG Image
+                      Choose Profile Image
                     </label>
                     {avatarUrl && (
                       <button

@@ -172,13 +172,14 @@ export default function RecruiterDashboard({
   const [emailApplicationUpdates, setEmailApplicationUpdates] = useState(initialPrefs.emailApplicationUpdates);
   const [emailChatMessages, setEmailChatMessages] = useState(initialPrefs.emailChatMessages);
 
-  // Image Upload handler for Recruiter (supporting JPEG)
+  // Image Upload handler for Recruiter (supporting JPEG, PNG, WEBP)
   const handleRecruiterImageUpload = (e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "logo") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "image/jpeg" && file.type !== "image/jpg") {
-      alert("Format error: Only JPEG/JPG images are permitted for profile/logo upload.");
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Format error: Only JPEG, PNG or WEBP images are permitted for downloads/uploads.");
       return;
     }
 
@@ -1845,17 +1846,17 @@ export default function RecruiterDashboard({
                     className="w-16 h-16 rounded-full border border-slate-300 object-cover shadow-sm bg-white"
                   />
                   <span className="absolute bottom-0 right-0 bg-brand-teal text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-white leading-none">
-                    JPEG
+                    Image
                   </span>
                 </div>
                 <div className="space-y-1">
-                  <span className="block text-xs font-bold text-slate-700">Recruiter Photo (JPEG Only)</span>
-                  <p className="text-[11px] text-slate-500 leading-tight">Upload a clear professional photo. Only JPEG/JPG files supported.</p>
+                  <span className="block text-xs font-bold text-slate-705">Recruiter Photo</span>
+                  <p className="text-[11px] text-slate-500 leading-tight">Upload a clear professional photo. JPEG, PNG, and WebP files supported.</p>
                   <div className="flex items-center gap-2 pt-1">
                     <input
                       type="file"
                       id="recruiter-photo-upload"
-                      accept="image/jpeg, image/jpg"
+                      accept="image/jpeg, image/jpg, image/png, image/webp"
                       onChange={(e) => handleRecruiterImageUpload(e, "avatar")}
                       className="hidden"
                     />
@@ -1863,7 +1864,7 @@ export default function RecruiterDashboard({
                       htmlFor="recruiter-photo-upload"
                       className="bg-white hover:bg-slate-50 text-slate-750 text-[11px] font-bold px-3 py-1.5 border border-slate-300 rounded cursor-pointer transition-colors shadow-sm inline-block"
                     >
-                      Choose JPEG Photo
+                      Choose Profile Photo
                     </label>
                     {recAvatarUrl && (
                       <button
@@ -1893,17 +1894,17 @@ export default function RecruiterDashboard({
                     )}
                   </div>
                   <span className="absolute bottom-0 right-0 bg-brand-teal text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-white leading-none">
-                    JPEG
+                    Image
                   </span>
                 </div>
                 <div className="space-y-1">
-                  <span className="block text-xs font-bold text-slate-705">Company Logo (JPEG Only)</span>
-                  <p className="text-[11px] text-slate-500 leading-tight">Upload your startup logo. Strictly in JPEG format.</p>
+                  <span className="block text-xs font-bold text-slate-705">Company Logo</span>
+                  <p className="text-[11px] text-slate-500 leading-tight">Upload your startup logo. JPEG, PNG, and WebP formats supported.</p>
                   <div className="flex items-center gap-2 pt-1">
                     <input
                       type="file"
                       id="company-logo-upload"
-                      accept="image/jpeg, image/jpg"
+                      accept="image/jpeg, image/jpg, image/png, image/webp"
                       onChange={(e) => handleRecruiterImageUpload(e, "logo")}
                       className="hidden"
                     />
@@ -1911,7 +1912,7 @@ export default function RecruiterDashboard({
                       htmlFor="company-logo-upload"
                       className="bg-white hover:bg-slate-50 text-slate-755 text-[11px] font-bold px-3 py-1.5 border border-slate-300 rounded cursor-pointer transition-colors shadow-sm inline-block"
                     >
-                      Choose JPEG Logo
+                      Choose Company Logo
                     </label>
                     {companyLogoUrl && (
                       <button

@@ -647,6 +647,15 @@ export const setupClientBackEnd = () => {
     }
 
     if (pathname.startsWith("/api/")) {
+      // Force real backend in cloud environments (e.g. Cloud Run, Vercel, localhost dev server on port 3000)
+      const isRealEnvironment = window.location.hostname.includes("run.app") || 
+                                window.location.hostname.includes("vercel") || 
+                                window.location.port === "3000" ||
+                                (window as any)._forceRealBackend === true;
+      if (isRealEnvironment) {
+        return originalFetch.apply(window, [input, init]);
+      }
+
       // Dynamic probe activation with promise deduplication
       if ((window as any)._useClientMock === undefined) {
         if (!backendCheckPromise) {
