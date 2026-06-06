@@ -670,6 +670,19 @@ export const setupClientBackEnd = () => {
 
       if ((window as any)._useClientMock) {
         return handleMockRequest(url, init);
+      } else {
+        try {
+          const res = await originalFetch.apply(window, [input, init]);
+          const ct = res.headers.get("content-type");
+          if (res.ok || (ct && ct.includes("application/json"))) {
+            return res;
+          }
+          console.warn("⚠️ Real backend returned non-JSON or error page. Falling back to local mock state.", pathname);
+          return handleMockRequest(url, init);
+        } catch (err) {
+          console.warn("⚠️ Real backend failed to fetch. Falling back to local mock state.", pathname, err);
+          return handleMockRequest(url, init);
+        }
       }
     }
 
